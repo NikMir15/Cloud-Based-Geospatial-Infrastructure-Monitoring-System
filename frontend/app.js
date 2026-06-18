@@ -1,194 +1,108 @@
-// ========================================
-// Infrastructure Monitoring System
-// ========================================
-
-// Create map
-var map = L.map('map', {
-    zoomControl: false
-}).setView([54.5, -3], 5);
-
-// Store markers
+let map;
 let markers = [];
+let socket;
 
-// Zoom controls
-L.control.zoom({
-    position: 'bottomright'
-}).addTo(map);
+// -----------------------------
+// INIT MAP
+// -----------------------------
+function initMap() {
+    map = L.map('map').setView([20, 0], 2);
 
-// Dark theme map
-L.tileLayer(
-    'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    {
-        attribution: '&copy; OpenStreetMap &copy; CARTO',
-        maxZoom: 19
-    }
-).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-// ========================================
-// Load Infrastructure Locations
-// ========================================
+    // Click event → NEAREST SENSOR
+    map.on("click", function (e) {
+        const lat = e.latlng.lat;
+        const lng = e.latlng.lng;
 
-fetch("http://127.0.0.1:8000/locations")
-.then(response => response.json())
-.then(data => {
+        fetch(`http://localhost:8000/nearest?lat=${lat}&lon=${lng}`)
+            .then(res => res.json())
+            .then(data => {
+                console.log("Nearest:", data);
 
-    data.forEach(point => {
+                if (data && data.distance_meters !== undefined) {
 
-        let markerColor = "blue";
-
-        // Assign colors based on infrastructure type
-        if (point.infra_type === "Cloud") {
-            markerColor = "red";
-        }
-
-        if (point.infra_type === "Education") {
-            markerColor = "green";
-        }
-
-        if (point.infra_type === "Healthcare") {
-            markerColor = "blue";
-        }
-
-        if (point.infra_type === "Transport") {
-            markerColor = "orange";
-        }
-
-        const marker = L.circleMarker(
-            [point.latitude, point.longitude],
-            {
-                radius: 10,
-                color: markerColor,
-                fillColor: markerColor,
-                fillOpacity: 0.8,
-                weight: 2
-            }
-        );
-
-        marker.bindPopup(`
-            <b>${point.name}</b><br>
-            ${point.description}<br>
-            <b>Type:</b> ${point.infra_type}
-        `);
-
-        marker.infraType = point.infra_type;
-
-        marker.addTo(map);
-
-        markers.push(marker);
-
+                    L.popup()
+                        .setLatLng([lat, lng])
+                        .setContent(
+                            `
+                            <b>Nearest Sensor</b><br/>
+                            Name: ${data.name}<br/>
+                            Type: ${data.infra_type}<br/>
+                            Distance: ${data.distance_meters.toFixed(2)} meters
+                            `
+                        )
+                        .openOn(map);
+                }
+            })
+            .catch(err => console.error("Nearest API error:", err));
     });
-
-})
-.catch(error => {
-    console.error("Error loading locations:", error);
-});
-
-// ========================================
-// Infrastructure Filters
-// ========================================
-
-function applyFilters() {
-
-    markers.forEach(marker => {
-
-        let visible = false;
-
-        if (
-            marker.infraType === "Cloud" &&
-            document.getElementById("cloudFilter").checked
-        ) {
-            visible = true;
-        }
-
-        if (
-            marker.infraType === "Education" &&
-            document.getElementById("educationFilter").checked
-        ) {
-            visible = true;
-        }
-
-        if (
-            marker.infraType === "Healthcare" &&
-            document.getElementById("healthcareFilter").checked
-        ) {
-            visible = true;
-        }
-
-        if (
-            marker.infraType === "Transport" &&
-            document.getElementById("transportFilter").checked
-        ) {
-            visible = true;
-        }
-
-        if (visible) {
-
-            if (!map.hasLayer(marker)) {
-                marker.addTo(map);
-            }
-
-        } else {
-
-            if (map.hasLayer(marker)) {
-                map.removeLayer(marker);
-            }
-
-        }
-
-    });
-
 }
 
-// Event Listeners
-document.getElementById("cloudFilter")
-    .addEventListener("change", applyFilters);
 
-document.getElementById("educationFilter")
-    .addEventListener("change", applyFilters);
+// -----------------------------
+// UPDATE MARKERS
+// -----------------------------
+function updateMarkers(data) {
+    // remove old markers
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
 
-document.getElementById("healthcareFilter")
-    .addEventListener("change", applyFilters);
+    data.forEach(point => {
+        const marker = L.marker([point.latitude, point.longitude])
+            .addTo(map)
+            .bindPopup(`
+                <b>${point.name}</b><br/>
+                Type: ${point.infra_type || "N/A"}<br/>
+                ${point.description || ""}
+            `);
 
-document.getElementById("transportFilter")
-    .addEventListener("change", applyFilters);
-
-// ========================================
-// Find Nearest Infrastructure
-// ========================================
-
-map.on("click", function(e) {
-
-    const lat = e.latlng.lat;
-    const lon = e.latlng.lng;
-
-    fetch(
-        `http://127.0.0.1:8000/nearest?lat=${lat}&lon=${lon}`
-    )
-    .then(response => response.json())
-    .then(data => {
-
-        L.popup()
-            .setLatLng([lat, lon])
-            .setContent(`
-                <b>Nearest Infrastructure</b>
-                <hr>
-                <b>Name:</b> ${data.name}<br>
-                <b>Type:</b> ${data.infra_type}<br>
-                <b>Distance:</b> ${data.distance_km} km
-            `)
-            .openOn(map);
-
-    })
-    .catch(error => {
-        console.error("Nearest Infrastructure Error:", error);
+        markers.push(marker);
     });
+}
 
-});
 
-// ========================================
-// Fix Leaflet Rendering
-// ========================================
+// -----------------------------
+// LOAD INITIAL DATA
+// -----------------------------
+function loadInitialData() {
+    fetch("http://localhost:8000/locations")
+        .then(res => res.json())
+        .then(data => {
+            updateMarkers(data);
+        })
+        .catch(err => console.error("Locations error:", err));
+}
 
-setTimeout(() => {
-    map.invalidateSize();
-}, 200);
+
+// -----------------------------
+// WEBSOCKET LIVE UPDATES
+// -----------------------------
+function connectWebSocket() {
+    socket = new WebSocket("ws://localhost:8000/ws/locations");
+
+    socket.onopen = () => {
+        console.log("WebSocket connected");
+    };
+
+    socket.onmessage = function (event) {
+        const data = JSON.parse(event.data);
+        updateMarkers(data);
+    };
+
+    socket.onerror = function (err) {
+        console.error("WebSocket error:", err);
+    };
+}
+
+
+// -----------------------------
+// INIT APP
+// -----------------------------
+window.onload = function () {
+    initMap();
+    loadInitialData();
+    connectWebSocket();
+};

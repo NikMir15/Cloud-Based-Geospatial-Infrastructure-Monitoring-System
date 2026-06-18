@@ -1,18 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Geospatial Monitoring System</title>
+    <title>Geospatial Intelligence Dashboard</title>
 
-    <!-- Leaflet CSS -->
-    <link
-        rel="stylesheet"
-        href="https://unpkg.com/leaflet/dist/leaflet.css"
-    />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
     <style>
         body {
             margin: 0;
-            font-family: Arial, sans-serif;
+            font-family: Arial;
         }
 
         #map {
@@ -20,77 +16,83 @@
             width: 100%;
         }
 
-        .header {
+        /* Dashboard */
+        .dashboard {
             position: absolute;
-            z-index: 999;
-            background: rgba(0,0,0,0.7);
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: rgba(0,0,0,0.85);
             color: white;
-            padding: 10px 15px;
-            margin: 10px;
-            border-radius: 8px;
+            padding: 15px;
+            border-radius: 10px;
+            width: 230px;
+        }
+
+        .card {
+            margin-top: 10px;
+            padding: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 6px;
+        }
+
+        .title {
+            font-weight: bold;
+            margin-bottom: 5px;
         }
     </style>
 </head>
 
 <body>
 
-<div class="header">
-    Live Geospatial Monitoring System
-</div>
-
 <div id="map"></div>
 
-<!-- Leaflet JS -->
+<!-- Dashboard -->
+<div class="dashboard">
+    <div class="title">Analytics Dashboard</div>
+
+    <div class="card">
+        Total Nodes: <span id="total">0</span>
+    </div>
+
+    <div class="card">
+        <div class="title">By Type</div>
+        <div id="types"></div>
+    </div>
+</div>
+
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
-/* ---------------------------
-   1. INIT MAP
----------------------------- */
+/* ---------------- MAP ---------------- */
 const map = L.map('map').setView([20, 0], 2);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors'
+    attribution: '&copy; OpenStreetMap'
 }).addTo(map);
 
-/* ---------------------------
-   2. MARKER STORAGE
----------------------------- */
+/* ---------------- MARKERS ---------------- */
 let markers = [];
 
-/* ---------------------------
-   3. UPDATE MARKERS FUNCTION
----------------------------- */
 function updateMarkers(data) {
-    // remove old markers
     markers.forEach(m => map.removeLayer(m));
     markers = [];
 
-    data.forEach(point => {
-        const marker = L.marker([point.latitude, point.longitude])
+    data.forEach(p => {
+        const marker = L.marker([p.latitude, p.longitude])
             .addTo(map)
-            .bindPopup(`
-                <b>${point.name}</b><br/>
-                Type: ${point.infra_type || 'N/A'}<br/>
-                ${point.description || ''}
-            `);
+            .bindPopup(`<b>${p.name}</b><br>${p.infra_type}`);
 
         markers.push(marker);
     });
 }
 
-/* ---------------------------
-   4. INITIAL DATA LOAD
----------------------------- */
+/* ---------------- INITIAL LOAD ---------------- */
 fetch("http://localhost:8000/locations")
-    .then(res => res.json())
-    .then(data => {
-        updateMarkers(data);
-    });
+    .then(r => r.json())
+    .then(updateMarkers);
 
-/* ---------------------------
-   5. WEBSOCKET LIVE UPDATES
----------------------------- */
+/* ---------------- WEBSOCKET ---------------- */
 const socket = new WebSocket("ws://localhost:8000/ws/locations");
 
 socket.onmessage = function(event) {
@@ -98,13 +100,25 @@ socket.onmessage = function(event) {
     updateMarkers(data);
 };
 
-socket.onopen = () => {
-    console.log("WebSocket connected");
-};
+/* ---------------- ANALYTICS ---------------- */
+function loadAnalytics() {
+    fetch("http://localhost:8000/analytics")
+        .then(r => r.json())
+        .then(data => {
 
-socket.onerror = (err) => {
-    console.error("WebSocket error:", err);
-};
+            document.getElementById("total").innerText = data.total_points;
+
+            let html = "";
+            data.by_type.forEach(t => {
+                html += `<div>${t.type}: ${t.count}</div>`;
+            });
+
+            document.getElementById("types").innerHTML = html;
+        });
+}
+
+loadAnalytics();
+setInterval(loadAnalytics, 5000);
 
 </script>
 
