@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+    <title>Infrastructure Monitoring System</title>
+
+    <link rel="stylesheet"
+          href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+    <link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+
+<div class="title-box">
+    Infrastructure Monitoring System
+</div>
+
+<div class="filter-panel">
+    <h3>Infrastructure Filters</h3>
+
+    <label>
+        <input type="checkbox" id="cloudFilter" checked>
+        Cloud
+    </label>
+    <br>
+
+    <label>
+        <input type="checkbox" id="educationFilter" checked>
+        Education
+    </label>
+    <br>
+
+    <label>
+        <input type="checkbox" id="healthcareFilter" checked>
+        Healthcare
+    </label>
+    <br>
+
+    <label>
+        <input type="checkbox" id="transportFilter" checked>
+        Transport
+    </label>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
