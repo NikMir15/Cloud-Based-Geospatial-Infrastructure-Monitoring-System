@@ -1,55 +1,112 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <title>Geospatial Monitoring System</title>
 
-    <title>Infrastructure Monitoring System</title>
+    <!-- Leaflet CSS -->
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet/dist/leaflet.css"
+    />
 
-    <link rel="icon" href="favicon.ico">
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
 
-    <link rel="stylesheet"
-          href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
 
-    <link rel="stylesheet" href="style.css">
-
+        .header {
+            position: absolute;
+            z-index: 999;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 15px;
+            margin: 10px;
+            border-radius: 8px;
+        }
+    </style>
 </head>
 
 <body>
 
-<div class="title-box">
-    Infrastructure Monitoring System
-</div>
-
-<div class="filter-panel">
-    <h3>Infrastructure Filters</h3>
-
-    <label>
-        <input type="checkbox" id="cloudFilter" checked>
-        Cloud
-    </label>
-    <br>
-
-    <label>
-        <input type="checkbox" id="educationFilter" checked>
-        Education
-    </label>
-    <br>
-
-    <label>
-        <input type="checkbox" id="healthcareFilter" checked>
-        Healthcare
-    </label>
-    <br>
-
-    <label>
-        <input type="checkbox" id="transportFilter" checked>
-        Transport
-    </label>
+<div class="header">
+    Live Geospatial Monitoring System
 </div>
 
 <div id="map"></div>
 
+<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="app.js"></script>
+
+<script>
+/* ---------------------------
+   1. INIT MAP
+---------------------------- */
+const map = L.map('map').setView([20, 0], 2);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+/* ---------------------------
+   2. MARKER STORAGE
+---------------------------- */
+let markers = [];
+
+/* ---------------------------
+   3. UPDATE MARKERS FUNCTION
+---------------------------- */
+function updateMarkers(data) {
+    // remove old markers
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+
+    data.forEach(point => {
+        const marker = L.marker([point.latitude, point.longitude])
+            .addTo(map)
+            .bindPopup(`
+                <b>${point.name}</b><br/>
+                Type: ${point.infra_type || 'N/A'}<br/>
+                ${point.description || ''}
+            `);
+
+        markers.push(marker);
+    });
+}
+
+/* ---------------------------
+   4. INITIAL DATA LOAD
+---------------------------- */
+fetch("http://localhost:8000/locations")
+    .then(res => res.json())
+    .then(data => {
+        updateMarkers(data);
+    });
+
+/* ---------------------------
+   5. WEBSOCKET LIVE UPDATES
+---------------------------- */
+const socket = new WebSocket("ws://localhost:8000/ws/locations");
+
+socket.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    updateMarkers(data);
+};
+
+socket.onopen = () => {
+    console.log("WebSocket connected");
+};
+
+socket.onerror = (err) => {
+    console.error("WebSocket error:", err);
+};
+
+</script>
 
 </body>
 </html>
