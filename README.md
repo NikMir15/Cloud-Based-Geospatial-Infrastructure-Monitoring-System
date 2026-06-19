@@ -1,204 +1,285 @@
 # Cloud-Based Geospatial Infrastructure Monitoring System
 
-A cloud-native geospatial analytics platform built using **Linux, FastAPI, PostgreSQL, and PostGIS** to store, manage, and visualize infrastructure data using geographic coordinates.
+## Overview
+
+The Cloud-Based Geospatial Infrastructure Monitoring System is a cloud-native platform designed to monitor, visualize, and analyze infrastructure assets across multiple geographic locations in real time.
+
+The system leverages FastAPI, PostgreSQL/PostGIS, Docker, WebSockets, and Leaflet.js to provide interactive geospatial visualization, infrastructure analytics, real-time updates, and intelligent monitoring capabilities.
 
 ---
 
-## Project Overview
+## Features
 
-This project demonstrates a **real-world geospatial backend system** capable of:
+### Interactive Geospatial Map
 
-* Storing infrastructure locations using spatial databases
-* Processing geospatial data with PostGIS
-* Serving data through REST APIs using FastAPI
-* Preparing for cloud deployment and interactive mapping
+* Global infrastructure visualization
+* Real-time marker updates
+* Dark-themed map interface
+* Nearest infrastructure lookup
 
-It simulates a foundation for **smart city systems, cloud infrastructure mapping, and urban analytics platforms**.
+### Infrastructure Monitoring
+
+* Sensor nodes
+* Traffic monitoring points
+* Environmental monitoring stations
+* Grid infrastructure nodes
+* Communication towers
+* Bridge monitoring systems
+
+### Risk Zone Visualization
+
+* Dynamic city-based risk zones
+* Infrastructure density analysis
+* Visual risk assessment using colored zones
+* Global monitoring coverage
+
+### Real-Time Updates
+
+* FastAPI WebSocket integration
+* Live sensor data streaming
+* Automatic frontend refresh
+* Simulated infrastructure movement
+
+### Analytics Dashboard
+
+* Total infrastructure count
+* Infrastructure categorization
+* Live statistics panel
+* Real-time monitoring metrics
+
+### Cloud-Native Architecture
+
+* Dockerized services
+* Multi-container deployment
+* PostGIS spatial database
+* FastAPI backend services
 
 ---
 
-## Key Features
+## Technology Stack
 
-* REST API built with FastAPI
-* PostgreSQL database integration
-* PostGIS support for geospatial data
-* Infrastructure location storage (latitude/longitude)
-* Real-time API responses
-* Linux-based development environment
+### Frontend
+
+* HTML5
+* CSS3
+* JavaScript (ES6)
+* Leaflet.js
+
+### Backend
+
+* Python 3.12
+* FastAPI
+* SQLAlchemy
+* WebSockets
+
+### Database
+
+* PostgreSQL
+* PostGIS
+
+### DevOps
+
+* Docker
+* Docker Compose
+* GitHub
 
 ---
 
-## Tech Stack
+## System Architecture
 
-* **Backend:** FastAPI (Python)
-* **Database:** PostgreSQL + PostGIS
-* **ORM/DB Layer:** SQLAlchemy
-* **Environment:** Linux (Ubuntu)
-* **Future Add-ons:** Docker, AWS, Leaflet.js
+Frontend (Leaflet.js Dashboard)
+│
+▼
+FastAPI Backend
+│
+▼
+PostgreSQL + PostGIS
+│
+▼
+Geospatial Analytics Engine
 
 ---
 
 ## Project Structure
 
-```
+```text
 Cloud-Based-Geospatial-Infrastructure-Monitoring-System/
 │
 ├── backend/
-│   ├── app/
-│   │   ├── database.py
-│   │   └── models.py (optional future)
 │   ├── main.py
-│   ├── .env
-│   └── requirements.txt
+│   ├── requirements.txt
+│   └── Dockerfile
 │
-├── infrastructure/
-├── frontend/ (future)
-├── scripts/
-├── docs/
-└── README.md
+├── frontend/
+│   ├── index.html
+│   ├── app.js
+│   ├── favicon.ico
+│   └── Dockerfile
+│
+├── docker-compose.yml
+├── README.md
+└── .gitignore
 ```
 
 ---
 
-## Setup Instructions
+## Installation
 
-### 1. Clone Repository
+### Clone Repository
 
 ```bash
 git clone https://github.com/NikMir15/Cloud-Based-Geospatial-Infrastructure-Monitoring-System.git
-cd Cloud-Based-Geospatial-Infrastructure-Monitoring-System/backend
+
+cd Cloud-Based-Geospatial-Infrastructure-Monitoring-System
 ```
 
----
-
-### 2. Create Virtual Environment
+### Build Containers
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+docker compose build
 ```
 
----
-
-### 3. Install Dependencies
+### Start Application
 
 ```bash
-pip install fastapi uvicorn sqlalchemy psycopg2-binary python-dotenv
+docker compose up -d
 ```
 
----
-
-### 4. Setup PostgreSQL + PostGIS
-
-```sql
-CREATE DATABASE geospatialdb;
-\c geospatialdb;
-CREATE EXTENSION postgis;
-```
-
----
-
-### 5. Configure Environment Variables
-
-Create `.env` file:
-
-```env
-DATABASE_URL=postgresql://postgres:yourpassword@localhost/geospatialdb
-```
-
----
-
-### 6. Run the API
+### Verify Containers
 
 ```bash
-uvicorn main:app --reload
+docker ps
 ```
 
-Open:
+Expected Containers:
 
-* http://127.0.0.1:8000
-* http://127.0.0.1:8000/docs
+```text
+geo-backend
+geo-frontend
+geodb
+```
 
 ---
 
-## API Endpoints
+## Application URLs
 
-### Root
+### Frontend
 
+```text
+http://localhost:8080
 ```
+
+### Backend API
+
+```text
+http://localhost:8000
+```
+
+### API Documentation
+
+```text
+http://localhost:8000/docs
+```
+
+---
+
+## Available APIs
+
+### Home
+
+```http
 GET /
 ```
 
-### Health Check
-
-```
-GET /health
-```
-
-### Get Infrastructure Locations
-
-```
-GET /locations
-```
-
-Response example:
-
-```json
-[
-  {
-    "id": 1,
-    "name": "AWS London Region",
-    "description": "Cloud Infrastructure",
-    "latitude": 51.5074,
-    "longitude": -0.1276
-  }
-]
-```
+Returns application status.
 
 ---
 
-## Geospatial Capability
+### Infrastructure Locations
 
-This project uses **PostGIS** to handle spatial data types:
+```http
+GET /locations
+```
 
-* Stores coordinates as `GEOGRAPHY(POINT, 4326)`
-* Supports real-world mapping applications
-* Enables future integration with Leaflet / Mapbox
+Returns all monitored infrastructure points.
+
+---
+
+### Analytics
+
+```http
+GET /analytics
+```
+
+Returns infrastructure statistics and summaries.
+
+---
+
+### Nearest Infrastructure
+
+```http
+GET /nearest?lat=<latitude>&lon=<longitude>
+```
+
+Returns the closest infrastructure asset to the selected coordinates.
+
+---
+
+### Live Updates
+
+```http
+WebSocket /ws/locations
+```
+
+Provides real-time infrastructure updates.
+
+---
+
+## Current Capabilities
+
+* Global infrastructure visualization
+* Geospatial database integration
+* Infrastructure analytics dashboard
+* Real-time WebSocket updates
+* Dynamic risk zone visualization
+* Dockerized deployment
+* PostGIS spatial querying
+* Nearest infrastructure search
 
 ---
 
 ## Future Enhancements
 
-* Interactive map UI (Leaflet.js)
-* AWS deployment (EC2 + RDS)
-* Docker containerization
-* Grafana monitoring dashboards
-* Real-time IoT location streaming
-* AI-based urban planning insights
+### Planned Features
 
----
-
-## Learning Outcomes
-
-This project demonstrates:
-
-* Linux system administration
-* Cloud-native architecture design
-* Backend API development
-* Database design with spatial data
-* DevOps-ready project structuring
-* Real-world geospatial systems understanding
+* Sensor health monitoring
+* Risk scoring engine
+* AI anomaly detection
+* Predictive infrastructure analytics
+* Kubernetes deployment
+* AWS cloud deployment
+* CI/CD pipeline automation
+* Alert management system
+* Geo-fencing support
+* Infrastructure Digital Twin capabilities
 
 ---
 
 ## Author
 
 **Nikunj Mirajkar**
+
 MSc Cloud & Enterprise Computing
-GitHub: https://github.com/NikMir15
+Nottingham Trent University
+
+LinkedIn:
+https://www.linkedin.com/in/nikunjmirajkar/
+
+GitHub:
+https://github.com/NikMir15
 
 ---
 
-## If you like this project
+## License
 
-Give it a star and feel free to contribute or fork!
+This project is developed for academic and research purposes and may be extended for enterprise geospatial infrastructure monitoring applications.
