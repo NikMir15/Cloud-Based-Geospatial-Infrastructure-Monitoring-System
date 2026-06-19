@@ -1,126 +1,92 @@
 <!DOCTYPE html>
-<html>
-<head>
-    <title>Geospatial Intelligence Dashboard</title>
+<html lang="en">
 
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Cloud-Based Geospatial Infrastructure Monitoring System</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
     <style>
-        body {
+        * {
             margin: 0;
-            font-family: Arial;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background: #111;
         }
 
         #map {
-            height: 100vh;
             width: 100%;
+            height: 100vh;
         }
 
-        /* Dashboard */
         .dashboard {
             position: absolute;
-            top: 10px;
-            right: 10px;
+            top: 15px;
+            left: 15px;
             z-index: 1000;
-            background: rgba(0,0,0,0.85);
+
+            min-width: 280px;
+
+            background: rgba(0, 0, 0, 0.85);
             color: white;
+
             padding: 15px;
-            border-radius: 10px;
-            width: 230px;
+
+            border-radius: 12px;
+
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.4);
         }
 
-        .card {
-            margin-top: 10px;
-            padding: 8px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 6px;
+        .dashboard h2 {
+            margin-bottom: 10px;
+            font-size: 18px;
         }
 
-        .title {
-            font-weight: bold;
-            margin-bottom: 5px;
+        .dashboard p {
+            margin: 5px 0;
+        }
+
+        .leaflet-popup-content {
+            font-size: 14px;
         }
     </style>
 </head>
 
 <body>
 
-<div id="map"></div>
+    <!-- Dashboard -->
+    <div class="dashboard">
 
-<!-- Dashboard -->
-<div class="dashboard">
-    <div class="title">Analytics Dashboard</div>
+        <h2>Infrastructure Monitor</h2>
 
-    <div class="card">
-        Total Nodes: <span id="total">0</span>
+        <div id="stats">
+            Loading statistics...
+        </div>
+
     </div>
 
-    <div class="card">
-        <div class="title">By Type</div>
-        <div id="types"></div>
-    </div>
-</div>
+    <!-- Map -->
+    <div id="map"></div>
 
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<script>
-/* ---------------- MAP ---------------- */
-const map = L.map('map').setView([20, 0], 2);
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap'
-}).addTo(map);
-
-/* ---------------- MARKERS ---------------- */
-let markers = [];
-
-function updateMarkers(data) {
-    markers.forEach(m => map.removeLayer(m));
-    markers = [];
-
-    data.forEach(p => {
-        const marker = L.marker([p.latitude, p.longitude])
-            .addTo(map)
-            .bindPopup(`<b>${p.name}</b><br>${p.infra_type}`);
-
-        markers.push(marker);
-    });
-}
-
-/* ---------------- INITIAL LOAD ---------------- */
-fetch("http://localhost:8000/locations")
-    .then(r => r.json())
-    .then(updateMarkers);
-
-/* ---------------- WEBSOCKET ---------------- */
-const socket = new WebSocket("ws://localhost:8000/ws/locations");
-
-socket.onmessage = function(event) {
-    const data = JSON.parse(event.data);
-    updateMarkers(data);
-};
-
-/* ---------------- ANALYTICS ---------------- */
-function loadAnalytics() {
-    fetch("http://localhost:8000/analytics")
-        .then(r => r.json())
-        .then(data => {
-
-            document.getElementById("total").innerText = data.total_points;
-
-            let html = "";
-            data.by_type.forEach(t => {
-                html += `<div>${t.type}: ${t.count}</div>`;
-            });
-
-            document.getElementById("types").innerHTML = html;
-        });
-}
-
-loadAnalytics();
-setInterval(loadAnalytics, 5000);
-
-</script>
+    <!-- App JS -->
+    <script src="app.js"></script>
 
 </body>
+
 </html>

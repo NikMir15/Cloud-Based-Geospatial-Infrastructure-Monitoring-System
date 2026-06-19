@@ -1,12 +1,18 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
+from dotenv import load_dotenv
+import os
+import random
+import asyncio
 
-from app.database import get_connection
+load_dotenv()
 
 app = FastAPI()
 
+# -------------------------
 # CORS
+# -------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,7 +21,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Home Endpoint
+# -------------------------
+# DATABASE
+# -------------------------
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL)
+
+# -------------------------
+# CACHE
+# -------------------------
+sensor_data = []
+
+
+# -------------------------
+# LOAD DATA
+# -------------------------
+def load_from_db():
+    conn = engine.connect()
+
+    result = conn.execute(text("""
+        SELECT id, name, description, infra_type,
+               ST_Y(location::geometry) AS latitude,
+               ST_X(location::geometry) AS longitude
+        FROM infrastructure_points
+    """))
+
+    return [dict(row._mapping) for row in result]
+
+
+# -------------------------
+# HOME
+# -------------------------
 @app.get("/")
 def home():
     return {
@@ -23,110 +59,111 @@ def home():
         "status": "Running"
     }
 
-# Health Check
-@app.get("/health")
-def health():
-    return {
-        "status": "healthy",
-        "database": "connected"
-    }
 
-# Get All Infrastructure Locations
+# -------------------------
+# LOCATIONS
+# -------------------------
 @app.get("/locations")
 def get_locations():
-
-    conn = get_connection()
-
-    result = conn.execute(
-        text("""
-            SELECT
-                id,
-                name,
-                description,
-                infra_type,
-                ST_Y(location::geometry) AS latitude,
-                ST_X(location::geometry) AS longitude
-            FROM infrastructure_points
-        """)
-    )
-
-    locations = []
-
-    for row in result:
-
-        locations.append({
-            "id": row.id,
-            "name": row.name,
-            "description": row.description,
-            "infra_type": row.infra_type,
-            "latitude": row.latitude,
-            "longitude": row.longitude
-        })
-
-    conn.close()
-
-    return locations
+    global sensor_data
+    sensor_data = load_from_db()
+    return sensor_data
 
 
-# Find Nearest Infrastructure
-@app.get("/nearest")
-def get_nearest(
-    lat: float = Query(...),
-    lon: float = Query(...)
-):
+# -------------------------
+# ANALYTICS
+# -------------------------
+@app.get("/analytics")
+def get_analytics():
+    conn = engine.connect()
 
-    conn = get_connection()
+    total = conn.execute(text("""
+        SELECT COUNT(*) FROM infrastructure_points
+    """)).fetchone()[0]
 
-    result = conn.execute(
-        text("""
-            SELECT
-                id,
-                name,
-                description,
-                infra_type,
-
-                ROUND(
-                    CAST(
-                        ST_Distance(
-                            location::geography,
-                            ST_SetSRID(
-                                ST_MakePoint(:lon, :lat),
-                                4326
-                            )::geography
-                        ) / 1000 AS numeric
-                    ),
-                    2
-                ) AS distance_km
-
-            FROM infrastructure_points
-
-            ORDER BY
-                location <-> ST_SetSRID(
-                    ST_MakePoint(:lon, :lat),
-                    4326
-                )
-
-            LIMIT 1
-        """),
-        {
-            "lat": lat,
-            "lon": lon
-        }
-    )
-
-    row = result.fetchone()
-
-    conn.close()
-
-    if row is None:
-        return {
-            "message": "No infrastructure points found"
-        }
+    by_type = conn.execute(text("""
+        SELECT infra_type, COUNT(*)
+        FROM infrastructure_points
+        GROUP BY infra_type
+    """)).fetchall()
 
     return {
-        "id": row.id,
-        "name": row.name,
-        "description": row.description,
-        "infra_type": row.infra_type,
-        "distance_km": float(row.distance_km)
+        "total_points": total,
+        "by_type": [
+            {"type": row[0], "count": row[1]}
+            for row in by_type
+        ]
     }
+
+
+# -------------------------
+# NEAREST (FIXED VERSION)
+# -------------------------
+@app.get("/nearest")
+def get_nearest(lat: float, lon: float):
+    conn = engine.connect()
+
+    query = text("""
+        SELECT
+            id,
+            name,
+            infra_type,
+            ST_Y(location::geometry) AS latitude,
+            ST_X(location::geometry) AS longitude,
+            ST_Distance(
+                location::geography,
+                ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
+            ) AS distance_meters
+        FROM infrastructure_points
+        ORDER BY distance_meters ASC
+        LIMIT 1;
+    """)
+
+    result = conn.execute(query, {"lat": lat, "lon": lon})
+    row = result.fetchone()
+
+    if not row:
+        return {"message": "No data found"}
+
+    data = dict(row._mapping)
+
+    # FORCE SAFE VALUE
+    data["distance_meters"] = float(data.get("distance_meters") or 0)
+
+    return data
+
+
+# -------------------------
+# LIVE SIMULATION
+# -------------------------
+async def simulate_movement():
+    global sensor_data
+
+    while True:
+        await asyncio.sleep(5)
+
+        for point in sensor_data:
+            point["latitude"] += random.uniform(-0.001, 0.001)
+            point["longitude"] += random.uniform(-0.001, 0.001)
+
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(simulate_movement())
+
+
+# -------------------------
+# WEBSOCKET
+# -------------------------
+@app.websocket("/ws/locations")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+
+    try:
+        while True:
+            await asyncio.sleep(3)
+            data = load_from_db()
+            await websocket.send_json(data)
+
+    except:
+        pass
