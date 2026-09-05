@@ -2,90 +2,308 @@
 <html lang="en">
 
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Cloud-Based Geospatial Infrastructure Monitoring System</title>
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet"
-        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <title>
+        Infrastructure Situational Awareness Platform
+    </title>
 
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+    <link
+        rel="icon"
+        href="favicon.ico"
+    >
 
-        html,
-        body {
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            font-family: Arial, sans-serif;
-            background: #111;
-        }
+    <!-- Leaflet -->
 
-        #map {
-            width: 100%;
-            height: 100vh;
-        }
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    >
 
-        .dashboard {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            z-index: 1000;
+    <!-- Marker clustering -->
 
-            min-width: 280px;
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+    >
 
-            background: rgba(0, 0, 0, 0.85);
-            color: white;
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+    >
 
-            padding: 15px;
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
 
-            border-radius: 12px;
-
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.4);
-        }
-
-        .dashboard h2 {
-            margin-bottom: 10px;
-            font-size: 18px;
-        }
-
-        .dashboard p {
-            margin: 5px 0;
-        }
-
-        .leaflet-popup-content {
-            font-size: 14px;
-        }
-    </style>
 </head>
+
 
 <body>
 
-    <!-- Dashboard -->
-    <div class="dashboard">
 
-        <h2>Infrastructure Monitor</h2>
+<!-- ================================================= -->
+<!-- MAP -->
+<!-- ================================================= -->
 
-        <div id="stats">
-            Loading statistics...
+<div id="map"></div>
+
+
+<!-- ================================================= -->
+<!-- COMMAND CENTRE -->
+<!-- ================================================= -->
+
+<aside class="command-panel">
+
+    <div class="brand-row">
+
+        <div>
+
+            <div class="eyebrow">
+                GEO INTELLIGENCE
+            </div>
+
+            <h1>
+                Infrastructure Monitor
+            </h1>
+
+        </div>
+
+        <div
+            id="systemStatus"
+            class="status-badge online"
+        >
+            ONLINE
         </div>
 
     </div>
 
-    <!-- Map -->
-    <div id="map"></div>
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- SEARCH -->
 
-    <!-- App JS -->
-    <script src="app.js"></script>
+    <div class="control-section">
+
+        <label for="searchBox">
+            Search
+        </label>
+
+        <input
+            id="searchBox"
+            type="text"
+            placeholder="Search assets..."
+            autocomplete="off"
+        >
+
+    </div>
+
+
+    <!-- FILTER -->
+
+    <div class="control-section">
+
+        <label for="typeFilter">
+            Infrastructure Type
+        </label>
+
+        <select id="typeFilter">
+
+            <option value="all">
+                All Infrastructure
+            </option>
+
+        </select>
+
+    </div>
+
+
+    <!-- KPIs -->
+
+    <div class="kpi-grid">
+
+        <div class="kpi-card">
+
+            <span>
+                Infrastructure
+            </span>
+
+            <strong id="totalInfrastructure">
+                0
+            </strong>
+
+        </div>
+
+
+        <div class="kpi-card alert-card">
+
+            <span>
+                Active Alerts
+            </span>
+
+            <strong id="activeAlerts">
+                0
+            </strong>
+
+        </div>
+
+
+        <div class="kpi-card risk-card">
+
+            <span>
+                High Risk
+            </span>
+
+            <strong id="highRisk">
+                0
+            </strong>
+
+        </div>
+
+
+        <div class="kpi-card critical-card">
+
+            <span>
+                Critical
+            </span>
+
+            <strong id="criticalEvents">
+                0
+            </strong>
+
+        </div>
+
+    </div>
+
+
+    <!-- ASSET DISTRIBUTION -->
+
+    <section class="panel-section">
+
+        <div class="section-title">
+            ASSET DISTRIBUTION
+        </div>
+
+        <div id="typeStats">
+            Loading...
+        </div>
+
+    </section>
+
+
+    <!-- LIVE EVENTS -->
+
+    <section class="panel-section">
+
+        <div class="section-title-row">
+
+            <div class="section-title">
+                LIVE EVENTS
+            </div>
+
+            <span class="live-dot"></span>
+
+        </div>
+
+
+        <div
+            id="eventFeed"
+            class="event-feed"
+        >
+            Loading events...
+        </div>
+
+    </section>
+
+</aside>
+
+
+<!-- ================================================= -->
+<!-- MAP LEGEND -->
+<!-- ================================================= -->
+
+<div class="map-legend">
+
+    <div class="legend-title">
+        INFRASTRUCTURE
+    </div>
+
+    <div class="legend-row">
+
+        <span>
+            <i class="legend-dot cloud"></i>
+            Cloud
+        </span>
+
+        <span>
+            <i class="legend-dot education"></i>
+            Education
+        </span>
+
+        <span>
+            <i class="legend-dot healthcare"></i>
+            Healthcare
+        </span>
+
+        <span>
+            <i class="legend-dot transport"></i>
+            Transport
+        </span>
+
+        <span>
+            <i class="legend-dot telecom"></i>
+            Telecom
+        </span>
+
+    </div>
+
+
+    <div class="legend-title hazard-title">
+        HAZARDS
+    </div>
+
+    <div class="legend-row">
+
+        <span>
+            <i class="legend-dot earthquake"></i>
+            Earthquake
+        </span>
+
+        <span>
+            <i class="legend-dot flood"></i>
+            Flood
+        </span>
+
+        <span>
+            <i class="legend-dot storm"></i>
+            Storm
+        </span>
+
+    </div>
+
+</div>
+
+
+<!-- Leaflet -->
+
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+</script>
+
+
+<!-- Marker cluster -->
+
+<script
+    src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js">
+</script>
+
+
+<script src="app.js"></script>
 
 </body>
 
