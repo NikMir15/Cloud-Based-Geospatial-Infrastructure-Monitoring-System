@@ -4,9 +4,11 @@ let clusterGroup;
 
 let infrastructureData = [];
 
-let eventLayers = [];
+let riskData = [];
 
-let eventData = [];
+let earthquakeData = [];
+
+let earthquakeLayers = [];
 
 let locationSocket;
 
@@ -14,97 +16,152 @@ let eventSocket;
 
 
 /* =========================================================
-   API CONFIG
+   API
 ========================================================= */
 
 const API_URL =
     `${window.location.protocol}//${window.location.hostname}:8000`;
 
 
+
 /* =========================================================
    INFRASTRUCTURE COLORS
 ========================================================= */
 
-function getMarkerColor(type) {
+function getInfrastructureColor(type) {
 
     const colors = {
-        cloud: "#25c7ff",
-        education: "#43df8c",
-        healthcare: "#ff5468",
-        transport: "#ffc845",
-        telecom: "#c06cff",
 
-        sensor: "#20d8ff",
-        traffic: "#ff9f32",
-        environment: "#47df88",
-        grid: "#f3dc4c",
-        bridge: "#ff5757",
-        coastal: "#3fbaff",
-        tower: "#a968ff"
+        cloud:
+            "#25c7ff",
+
+        education:
+            "#43df8c",
+
+        healthcare:
+            "#ff5468",
+
+        transport:
+            "#ffc845",
+
+        telecom:
+            "#c06cff",
+
+        sensor:
+            "#20d8ff",
+
+        traffic:
+            "#ff9f32",
+
+        environment:
+            "#47df88",
+
+        grid:
+            "#f3dc4c",
+
+        bridge:
+            "#ff5757",
+
+        coastal:
+            "#3fbaff",
+
+        tower:
+            "#a968ff"
     };
+
 
     return (
         colors[
-            (type || "").toLowerCase()
+            (type || "")
+            .toLowerCase()
         ]
-        || "#cad4dc"
+        ||
+        "#cad4dc"
     );
 }
 
 
+
 /* =========================================================
-   INITIALISE MAP
+   RISK COLORS
+========================================================= */
+
+function getRiskColor(severity) {
+
+    const value =
+        (severity || "low")
+        .toLowerCase();
+
+
+    if (value === "critical") {
+        return "#ff4057";
+    }
+
+
+    if (value === "high") {
+        return "#ff843d";
+    }
+
+
+    if (value === "medium") {
+        return "#ffc845";
+    }
+
+
+    return "#45df8c";
+}
+
+
+
+/* =========================================================
+   MAP
 ========================================================= */
 
 function initMap() {
 
-    map = L.map(
-        "map",
-        {
-            zoomControl: false,
+    map =
+        L.map(
+            "map",
+            {
+                zoomControl:
+                    false,
 
-            // Gives the same continuous world feel
-            // as the previous map.
-            worldCopyJump: true,
+                worldCopyJump:
+                    true,
 
-            minZoom: 2
-        }
-    )
-    .setView(
-        [20, 5],
-        2
-    );
+                minZoom:
+                    2
+            }
+        )
+        .setView(
+            [20, 5],
+            2
+        );
 
-
-    /* =====================================================
-       ZOOM CONTROL
-    ===================================================== */
 
     L.control
         .zoom(
             {
-                position: "bottomright"
+                position:
+                    "bottomright"
             }
         )
         .addTo(map);
 
 
-    /* =====================================================
-       OPENSTREETMAP BASEMAP
-       No CARTO API key required.
-    ===================================================== */
+    /* Free OpenStreetMap tiles */
 
     L.tileLayer(
         "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         {
-            minZoom: 2,
+            minZoom:
+                2,
 
-            maxZoom: 19,
+            maxZoom:
+                19,
 
-            // Important:
-            // allow world copies instead of a small
-            // rectangular world panel.
-            noWrap: false,
+            noWrap:
+                false,
 
             attribution:
                 "&copy; OpenStreetMap contributors"
@@ -113,18 +170,17 @@ function initMap() {
     .addTo(map);
 
 
-    /* =====================================================
-       CLUSTER GROUP
-    ===================================================== */
-
     clusterGroup =
         L.markerClusterGroup(
             {
-                showCoverageOnHover: false,
+                showCoverageOnHover:
+                    false,
 
-                spiderfyOnMaxZoom: true,
+                spiderfyOnMaxZoom:
+                    true,
 
-                disableClusteringAtZoom: 12,
+                disableClusteringAtZoom:
+                    12,
 
                 iconCreateFunction:
                     createClusterIcon
@@ -137,10 +193,6 @@ function initMap() {
     );
 
 
-    /* =====================================================
-       CLICK MAP → NEAREST INFRASTRUCTURE
-    ===================================================== */
-
     map.on(
         "click",
         handleMapClick
@@ -148,8 +200,9 @@ function initMap() {
 }
 
 
+
 /* =========================================================
-   CUSTOM CLUSTER ICONS
+   CLUSTER ICONS
 ========================================================= */
 
 function createClusterIcon(cluster) {
@@ -158,7 +211,7 @@ function createClusterIcon(cluster) {
         cluster.getChildCount();
 
 
-    let clusterClass =
+    let className =
         "cluster-low";
 
 
@@ -168,7 +221,7 @@ function createClusterIcon(cluster) {
 
     if (count >= 10) {
 
-        clusterClass =
+        className =
             "cluster-medium";
 
         size =
@@ -178,7 +231,7 @@ function createClusterIcon(cluster) {
 
     if (count >= 20) {
 
-        clusterClass =
+        className =
             "cluster-high";
 
         size =
@@ -188,12 +241,11 @@ function createClusterIcon(cluster) {
 
     return L.divIcon(
         {
-            html:
-                `
+            html: `
                 <div
                     class="
                         custom-cluster
-                        ${clusterClass}
+                        ${className}
                     "
                     style="
                         width:${size}px;
@@ -202,109 +254,78 @@ function createClusterIcon(cluster) {
                 >
                     ${count}
                 </div>
-                `,
+            `,
 
-            className: "",
+            className:
+                "",
 
-            iconSize: [
-                size,
-                size
-            ]
+            iconSize:
+                [
+                    size,
+                    size
+                ]
         }
     );
 }
 
 
+
 /* =========================================================
-   MAP CLICK → NEAREST INFRASTRUCTURE
+   RISK LOOKUP
 ========================================================= */
 
-async function handleMapClick(event) {
+function getAssetRisk(assetId) {
 
-    try {
-
-        const lat =
-            event.latlng.lat;
-
-        const lon =
-            event.latlng.lng;
-
-
-        const response =
-            await fetch(
-                `${API_URL}/nearest?lat=${lat}&lon=${lon}`
-            );
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                "Nearest infrastructure request failed"
-            );
-        }
-
-
-        const data =
-            await response.json();
-
-
-        if (!data.name) {
-            return;
-        }
-
-
-        L.popup()
-            .setLatLng(
-                event.latlng
-            )
-            .setContent(
-                `
-                <strong>
-                    Nearest Infrastructure
-                </strong>
-
-                <br><br>
-
-                <strong>Name:</strong>
-                ${escapeHtml(data.name)}
-
-                <br>
-
-                <strong>Type:</strong>
-                ${escapeHtml(data.infra_type)}
-
-                <br>
-
-                <strong>Distance:</strong>
-                ${Number(
-                    data.distance_km || 0
-                ).toFixed(2)} km
-                `
-            )
-            .openOn(map);
-
-    }
-
-    catch (error) {
-
-        console.error(
-            "Nearest infrastructure error:",
-            error
-        );
-    }
+    return riskData.find(
+        item =>
+            Number(item.id)
+            ===
+            Number(assetId)
+    );
 }
 
 
+
 /* =========================================================
-   CREATE INFRASTRUCTURE MARKER
+   INFRASTRUCTURE MARKER
 ========================================================= */
 
 function createInfrastructureMarker(point) {
 
-    const color =
-        getMarkerColor(
+    const risk =
+        getAssetRisk(
+            point.id
+        );
+
+
+    const severity =
+        risk
+        ? risk.severity
+        : (
+            point.severity
+            || "low"
+        );
+
+
+    const baseColor =
+        getInfrastructureColor(
             point.infra_type
         );
+
+
+    const markerColor =
+        (
+            risk
+            &&
+            risk.risk_score
+            >= 30
+        )
+        ?
+        getRiskColor(
+            severity
+        )
+        :
+        baseColor;
 
 
     const marker =
@@ -314,17 +335,77 @@ function createInfrastructureMarker(point) {
                 point.longitude
             ],
             {
-                radius: 7,
+                radius:
+                    risk
+                    ? 9
+                    : 7,
 
-                color: color,
+                color:
+                    markerColor,
 
-                fillColor: color,
+                fillColor:
+                    markerColor,
 
-                fillOpacity: 0.95,
+                fillOpacity:
+                    0.95,
 
-                weight: 2
+                weight:
+                    risk
+                    ? 3
+                    : 2
             }
         );
+
+
+    let riskHtml =
+        `
+        <strong>
+            Estimated Risk:
+        </strong>
+
+        Low
+        `;
+
+
+    if (risk) {
+
+        riskHtml =
+            `
+            <strong>
+                Estimated Exposure:
+            </strong>
+
+            ${risk.risk_score}/100
+
+            <br>
+
+            <strong>
+                Severity:
+            </strong>
+
+            ${escapeHtml(
+                risk.severity
+            )}
+
+            <br>
+
+            <strong>
+                Hazard:
+            </strong>
+
+            M${risk.magnitude}
+            earthquake
+
+            <br>
+
+            <strong>
+                Distance:
+            </strong>
+
+            ${risk.distance_km}
+            km
+            `;
+    }
 
 
     marker.bindPopup(
@@ -336,7 +417,8 @@ function createInfrastructureMarker(point) {
         <br><br>
 
         ${escapeHtml(
-            point.description || ""
+            point.description
+            || ""
         )}
 
         <br>
@@ -346,8 +428,24 @@ function createInfrastructureMarker(point) {
         </strong>
 
         ${escapeHtml(
-            point.infra_type || "Unknown"
+            point.infra_type
+            || "Unknown"
         )}
+
+        <br>
+
+        <strong>
+            Operational Status:
+        </strong>
+
+        ${escapeHtml(
+            point.status
+            || "operational"
+        )}
+
+        <br><br>
+
+        ${riskHtml}
         `
     );
 
@@ -356,39 +454,50 @@ function createInfrastructureMarker(point) {
 }
 
 
+
 /* =========================================================
-   RENDER INFRASTRUCTURE
+   DRAW INFRASTRUCTURE
 ========================================================= */
 
-function renderInfrastructure(data) {
+function renderInfrastructure(
+    data
+) {
 
-    clusterGroup.clearLayers();
+    clusterGroup
+        .clearLayers();
 
 
     data.forEach(
         point => {
 
             if (
-                point.latitude == null
+                point.latitude
+                == null
+
                 ||
-                point.longitude == null
+
+                point.longitude
+                == null
             ) {
+
                 return;
             }
 
 
-            clusterGroup.addLayer(
-                createInfrastructureMarker(
-                    point
-                )
-            );
+            clusterGroup
+                .addLayer(
+                    createInfrastructureMarker(
+                        point
+                    )
+                );
         }
     );
 }
 
 
+
 /* =========================================================
-   POPULATE FILTER
+   FILTER TYPES
 ========================================================= */
 
 function populateTypeFilter(data) {
@@ -399,7 +508,7 @@ function populateTypeFilter(data) {
         );
 
 
-    const selectedValue =
+    const existing =
         select.value;
 
 
@@ -407,11 +516,11 @@ function populateTypeFilter(data) {
         [
             ...new Set(
                 data
-                    .map(
-                        item =>
-                            item.infra_type
-                    )
-                    .filter(Boolean)
+                .map(
+                    item =>
+                        item.infra_type
+                )
+                .filter(Boolean)
             )
         ]
         .sort();
@@ -451,14 +560,15 @@ function populateTypeFilter(data) {
 
     if (
         types.includes(
-            selectedValue
+            existing
         )
     ) {
 
         select.value =
-            selectedValue;
+            existing;
     }
 }
+
 
 
 /* =========================================================
@@ -469,51 +579,95 @@ function applyFilters() {
 
     const search =
         document
-            .getElementById(
-                "searchBox"
-            )
-            .value
-            .toLowerCase()
-            .trim();
+        .getElementById(
+            "searchBox"
+        )
+        .value
+        .trim()
+        .toLowerCase();
 
 
     const selectedType =
         document
-            .getElementById(
-                "typeFilter"
-            )
-            .value;
+        .getElementById(
+            "typeFilter"
+        )
+        .value;
+
+
+    const selectedRisk =
+        document
+        .getElementById(
+            "riskFilter"
+        )
+        .value;
 
 
     const filtered =
-        infrastructureData.filter(
-            item => {
+        infrastructureData
+        .filter(
+            point => {
 
-                const searchableText =
+                const text =
                     `
-                    ${item.name || ""}
-                    ${item.description || ""}
-                    ${item.infra_type || ""}
+                    ${point.name || ""}
+                    ${point.description || ""}
+                    ${point.infra_type || ""}
                     `
                     .toLowerCase();
 
 
                 const matchesSearch =
-                    searchableText.includes(
+                    text.includes(
                         search
                     );
 
 
                 const matchesType =
-                    selectedType === "all"
+                    (
+                        selectedType
+                        === "all"
+                    )
                     ||
-                    item.infra_type === selectedType;
+                    (
+                        point.infra_type
+                        === selectedType
+                    );
+
+
+                const risk =
+                    getAssetRisk(
+                        point.id
+                    );
+
+
+                const severity =
+                    risk
+                    ? risk.severity
+                    : (
+                        point.severity
+                        || "low"
+                    );
+
+
+                const matchesRisk =
+                    (
+                        selectedRisk
+                        === "all"
+                    )
+                    ||
+                    (
+                        severity
+                        === selectedRisk
+                    );
 
 
                 return (
                     matchesSearch
                     &&
                     matchesType
+                    &&
+                    matchesRisk
                 );
             }
         );
@@ -523,6 +677,558 @@ function applyFilters() {
         filtered
     );
 }
+
+
+
+/* =========================================================
+   NEAREST INFRASTRUCTURE
+========================================================= */
+
+async function handleMapClick(event) {
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_URL}/nearest?lat=${event.latlng.lat}&lon=${event.latlng.lng}`
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!data.name) {
+            return;
+        }
+
+
+        L.popup()
+            .setLatLng(
+                event.latlng
+            )
+            .setContent(
+                `
+                <strong>
+                    Nearest Infrastructure
+                </strong>
+
+                <br><br>
+
+                ${escapeHtml(
+                    data.name
+                )}
+
+                <br>
+
+                ${escapeHtml(
+                    data.infra_type
+                )}
+
+                <br>
+
+                ${Number(
+                    data.distance_km
+                    || 0
+                ).toFixed(2)}
+                km
+                `
+            )
+            .openOn(map);
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Nearest lookup error:",
+            error
+        );
+    }
+}
+
+
+
+/* =========================================================
+   LOAD LOCATIONS
+========================================================= */
+
+async function loadLocations() {
+
+    const response =
+        await fetch(
+            `${API_URL}/locations`
+        );
+
+
+    infrastructureData =
+        await response.json();
+
+
+    populateTypeFilter(
+        infrastructureData
+    );
+
+
+    applyFilters();
+}
+
+
+
+/* =========================================================
+   LOAD RISK
+========================================================= */
+
+async function loadRisk() {
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_URL}/risk`
+            );
+
+
+        const data =
+            await response.json();
+
+
+        riskData =
+            data.assets
+            || [];
+
+
+        document
+            .getElementById(
+                "affectedAssets"
+            )
+            .textContent =
+            data.affected_assets
+            || 0;
+
+
+        renderRiskFeed(
+            riskData
+        );
+
+
+        applyFilters();
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Risk load error:",
+            error
+        );
+    }
+}
+
+
+
+/* =========================================================
+   RISK FEED
+========================================================= */
+
+function renderRiskFeed(data) {
+
+    const container =
+        document.getElementById(
+            "riskFeed"
+        );
+
+
+    const significant =
+        data
+        .filter(
+            item =>
+                item.risk_score
+                >= 30
+        )
+        .slice(
+            0,
+            8
+        );
+
+
+    if (
+        significant.length
+        === 0
+    ) {
+
+        container.innerHTML =
+            `
+            <div class="empty-state">
+                No monitored infrastructure
+                currently has elevated estimated
+                earthquake exposure.
+            </div>
+            `;
+
+        return;
+    }
+
+
+    container.innerHTML =
+        significant
+        .map(
+            asset => {
+
+                return `
+                    <div
+                        class="risk-item"
+                        onclick="
+                            focusAsset(
+                                ${asset.latitude},
+                                ${asset.longitude}
+                            )
+                        "
+                    >
+
+                        <div class="event-header">
+
+                            <strong>
+                                ${escapeHtml(
+                                    asset.name
+                                )}
+                            </strong>
+
+                            <span
+                                class="
+                                    severity
+                                    ${escapeHtml(
+                                        asset.severity
+                                    )}
+                                "
+                            >
+                                ${escapeHtml(
+                                    asset.severity
+                                )}
+                            </span>
+
+                        </div>
+
+                        <div class="event-type">
+
+                            Exposure:
+                            ${asset.risk_score}/100
+
+                        </div>
+
+                        <div class="event-description">
+
+                            M${asset.magnitude}
+                            earthquake
+
+                            ·
+
+                            ${asset.distance_km}
+                            km away
+
+                        </div>
+
+                    </div>
+                `;
+            }
+        )
+        .join("");
+}
+
+
+
+/* =========================================================
+   LIVE EARTHQUAKES
+========================================================= */
+
+function renderEarthquakes(events) {
+
+    earthquakeLayers
+        .forEach(
+            layer =>
+                map.removeLayer(
+                    layer
+                )
+        );
+
+
+    earthquakeLayers =
+        [];
+
+
+    events.forEach(
+        event => {
+
+            const color =
+                getRiskColor(
+                    event.severity
+                );
+
+
+            /* Earthquake centre */
+
+            const marker =
+                L.circleMarker(
+                    [
+                        event.latitude,
+                        event.longitude
+                    ],
+                    {
+                        radius:
+                            Math.max(
+                                5,
+                                Math.min(
+                                    13,
+                                    event.magnitude
+                                    * 1.7
+                                )
+                            ),
+
+                        color:
+                            "#ffffff",
+
+                        fillColor:
+                            color,
+
+                        fillOpacity:
+                            0.95,
+
+                        weight:
+                            1.5
+                    }
+                )
+                .addTo(map);
+
+
+            marker.bindPopup(
+                `
+                <div class="quake-popup">
+
+                    <span class="live-source">
+                        LIVE USGS
+                    </span>
+
+                    <h3>
+                        M${event.magnitude}
+                    </h3>
+
+                    <strong>
+                        ${escapeHtml(
+                            event.place
+                        )}
+                    </strong>
+
+                    <br><br>
+
+                    Depth:
+                    ${
+                        event.depth_km
+                        ?? "N/A"
+                    }
+                    km
+
+                    <br>
+
+                    Estimated exposure radius:
+                    ${event.radius_km}
+                    km
+
+                    <br>
+
+                    ${
+                        formatEventAge(
+                            event.timestamp
+                        )
+                    }
+
+                </div>
+                `
+            );
+
+
+            earthquakeLayers.push(
+                marker
+            );
+
+
+            /*
+               Only draw exposure circles for stronger
+               earthquakes so the world map stays readable.
+            */
+
+            if (
+                event.magnitude >= 4.5
+            ) {
+
+                const zone =
+                    L.circle(
+                        [
+                            event.latitude,
+                            event.longitude
+                        ],
+                        {
+                            radius:
+                                event.radius_km
+                                * 1000,
+
+                            color:
+                                color,
+
+                            fillColor:
+                                color,
+
+                            fillOpacity:
+                                0.035,
+
+                            weight:
+                                1,
+
+                            dashArray:
+                                "5 5"
+                        }
+                    )
+                    .addTo(map);
+
+
+                earthquakeLayers.push(
+                    zone
+                );
+            }
+        }
+    );
+
+
+    renderEventFeed(
+        events
+    );
+}
+
+
+
+/* =========================================================
+   EVENT FEED
+========================================================= */
+
+function renderEventFeed(events) {
+
+    const container =
+        document.getElementById(
+            "eventFeed"
+        );
+
+
+    const displayEvents =
+        [...events]
+        .sort(
+            (a, b) =>
+                b.magnitude
+                -
+                a.magnitude
+        )
+        .slice(
+            0,
+            12
+        );
+
+
+    if (
+        displayEvents.length
+        === 0
+    ) {
+
+        container.innerHTML =
+            `
+            <div class="empty-state">
+
+                No USGS M2.5+ earthquakes
+                currently available.
+
+            </div>
+            `;
+
+        return;
+    }
+
+
+    container.innerHTML =
+        displayEvents
+        .map(
+            event => {
+
+                return `
+                    <div
+                        class="event-card"
+                        onclick="
+                            focusEarthquake(
+                                ${event.latitude},
+                                ${event.longitude}
+                            )
+                        "
+                    >
+
+                        <div class="event-header">
+
+                            <span class="event-title">
+
+                                M${event.magnitude}
+
+                                ${escapeHtml(
+                                    event.place
+                                )}
+
+                            </span>
+
+                            <span
+                                class="
+                                    severity
+                                    ${escapeHtml(
+                                        event.severity
+                                    )}
+                                "
+                            >
+
+                                ${escapeHtml(
+                                    event.severity
+                                )}
+
+                            </span>
+
+                        </div>
+
+
+                        <div class="event-type">
+
+                            LIVE USGS
+
+                            ·
+
+                            Depth
+                            ${
+                                event.depth_km
+                                ?? "?"
+                            }
+                            km
+
+                        </div>
+
+
+                        <div class="event-description">
+
+                            ${
+                                formatEventAge(
+                                    event.timestamp
+                                )
+                            }
+
+                        </div>
+
+                    </div>
+                `;
+            }
+        )
+        .join("");
+}
+
 
 
 /* =========================================================
@@ -539,15 +1245,7 @@ async function loadAnalytics() {
             );
 
 
-        if (!response.ok) {
-
-            throw new Error(
-                "Analytics request failed"
-            );
-        }
-
-
-        const analytics =
+        const data =
             await response.json();
 
 
@@ -556,15 +1254,26 @@ async function loadAnalytics() {
                 "totalInfrastructure"
             )
             .textContent =
-            analytics.total_infrastructure ?? 0;
+            data.total_infrastructure
+            || 0;
 
 
         document
             .getElementById(
-                "activeAlerts"
+                "liveEarthquakes"
             )
             .textContent =
-            analytics.active_alerts ?? 0;
+            data.live_earthquakes
+            || 0;
+
+
+        document
+            .getElementById(
+                "affectedAssets"
+            )
+            .textContent =
+            data.affected_assets
+            || 0;
 
 
         document
@@ -572,7 +1281,8 @@ async function loadAnalytics() {
                 "highRisk"
             )
             .textContent =
-            analytics.high_risk_assets ?? 0;
+            data.high_risk_assets
+            || 0;
 
 
         document
@@ -580,11 +1290,45 @@ async function loadAnalytics() {
                 "criticalEvents"
             )
             .textContent =
-            analytics.critical_events ?? 0;
+            data.critical_events
+            || 0;
+
+
+        document
+            .getElementById(
+                "feedStatus"
+            )
+            .textContent =
+            data.live
+            ?
+            "LIVE"
+            :
+            "CACHE";
+
+
+        const source =
+            document.getElementById(
+                "dataSourceStatus"
+            );
+
+
+        source.textContent =
+            data.live
+            ?
+            "USGS LIVE"
+            :
+            "USGS CACHE";
+
+
+        source.classList.toggle(
+            "stale",
+            !data.live
+        );
 
 
         renderTypeStats(
-            analytics.by_type || {}
+            data.by_type
+            || {}
         );
 
     }
@@ -599,8 +1343,9 @@ async function loadAnalytics() {
 }
 
 
+
 /* =========================================================
-   TYPE STATISTICS
+   TYPE STATS
 ========================================================= */
 
 function renderTypeStats(stats) {
@@ -611,402 +1356,49 @@ function renderTypeStats(stats) {
         );
 
 
-    const entries =
-        Object.entries(stats);
-
-
-    if (entries.length === 0) {
-
-        container.innerHTML =
-            `
-            <div class="empty-state">
-                No infrastructure statistics.
-            </div>
-            `;
-
-        return;
-    }
-
-
     container.innerHTML =
-        entries
-            .map(
-                ([type, count]) => {
+        Object
+        .entries(stats)
+        .map(
+            ([type, count]) => {
 
-                    const color =
-                        getMarkerColor(
-                            type
-                        );
+                return `
+                    <div class="type-stat">
 
+                        <div class="type-stat-name">
 
-                    return `
-                        <div class="type-stat">
+                            <span
+                                class="type-color-dot"
+                                style="
+                                    background:
+                                    ${getInfrastructureColor(type)}
+                                "
+                            ></span>
 
-                            <div class="type-stat-name">
-
-                                <span
-                                    class="type-color-dot"
-                                    style="
-                                        background:${color}
-                                    "
-                                ></span>
-
-                                ${escapeHtml(type)}
-
-                            </div>
-
-                            <div class="type-stat-count">
-                                ${count}
-                            </div>
+                            ${escapeHtml(type)}
 
                         </div>
-                    `;
-                }
-            )
-            .join("");
-}
 
+                        <div class="type-stat-count">
 
-/* =========================================================
-   LOAD INFRASTRUCTURE
-========================================================= */
-
-async function loadLocations() {
-
-    try {
-
-        const response =
-            await fetch(
-                `${API_URL}/locations`
-            );
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                "Infrastructure request failed"
-            );
-        }
-
-
-        infrastructureData =
-            await response.json();
-
-
-        populateTypeFilter(
-            infrastructureData
-        );
-
-
-        renderInfrastructure(
-            infrastructureData
-        );
-
-    }
-
-    catch (error) {
-
-        console.error(
-            "Infrastructure loading error:",
-            error
-        );
-    }
-}
-
-
-/* =========================================================
-   EVENT SEVERITY COLOR
-========================================================= */
-
-function getEventColor(event) {
-
-    const severity =
-        (event.severity || "")
-            .toLowerCase();
-
-
-    if (severity === "critical") {
-
-        return "#ff4b5c";
-    }
-
-
-    if (severity === "high") {
-
-        return "#ff853d";
-    }
-
-
-    if (severity === "medium") {
-
-        return "#ffc845";
-    }
-
-
-    return "#25c7ff";
-}
-
-
-/* =========================================================
-   RENDER EVENTS
-========================================================= */
-
-function renderEvents(events) {
-
-    eventLayers.forEach(
-        layer => {
-
-            map.removeLayer(
-                layer
-            );
-        }
-    );
-
-
-    eventLayers = [];
-
-
-    events.forEach(
-        event => {
-
-            const color =
-                getEventColor(
-                    event
-                );
-
-
-            const radius =
-                Number(
-                    event.radius_km || 50
-                )
-                * 1000;
-
-
-            /* Hazard radius */
-
-            const zone =
-                L.circle(
-                    [
-                        event.latitude,
-                        event.longitude
-                    ],
-                    {
-                        radius: radius,
-
-                        color: color,
-
-                        fillColor: color,
-
-                        fillOpacity: 0.08,
-
-                        weight: 2,
-
-                        dashArray:
-                            "6 5"
-                    }
-                )
-                .addTo(map);
-
-
-            /* Hazard centre */
-
-            const marker =
-                L.circleMarker(
-                    [
-                        event.latitude,
-                        event.longitude
-                    ],
-                    {
-                        radius: 9,
-
-                        color: "#ffffff",
-
-                        fillColor: color,
-
-                        fillOpacity: 1,
-
-                        weight: 2
-                    }
-                )
-                .addTo(map);
-
-
-            marker.bindPopup(
-                `
-                <strong>
-                    ${escapeHtml(
-                        event.title
-                    )}
-                </strong>
-
-                <br><br>
-
-                <strong>Type:</strong>
-                ${escapeHtml(
-                    event.event_type
-                )}
-
-                <br>
-
-                <strong>Severity:</strong>
-                ${escapeHtml(
-                    event.severity
-                )}
-
-                <br>
-
-                <strong>Radius:</strong>
-                ${event.radius_km} km
-
-                <br><br>
-
-                ${escapeHtml(
-                    event.description || ""
-                )}
-                `
-            );
-
-
-            eventLayers.push(
-                zone,
-                marker
-            );
-        }
-    );
-
-
-    renderEventFeed(
-        events
-    );
-}
-
-
-/* =========================================================
-   EVENT FEED
-========================================================= */
-
-function renderEventFeed(events) {
-
-    const container =
-        document.getElementById(
-            "eventFeed"
-        );
-
-
-    if (events.length === 0) {
-
-        container.innerHTML =
-            `
-            <div class="event-card">
-                No active hazard events.
-            </div>
-            `;
-
-        return;
-    }
-
-
-    container.innerHTML =
-        events
-            .map(
-                (event, index) => {
-
-                    return `
-                        <div
-                            class="event-card"
-                            onclick="focusEvent(${index})"
-                        >
-
-                            <div class="event-header">
-
-                                <span class="event-title">
-
-                                    ${escapeHtml(
-                                        event.title
-                                    )}
-
-                                </span>
-
-                                <span
-                                    class="
-                                        severity
-                                        ${escapeHtml(
-                                            event.severity
-                                        )}
-                                    "
-                                >
-
-                                    ${escapeHtml(
-                                        event.severity
-                                    )}
-
-                                </span>
-
-                            </div>
-
-
-                            <div class="event-type">
-
-                                ${escapeHtml(
-                                    event.event_type
-                                )}
-
-                                ·
-
-                                ${event.radius_km} km radius
-
-                            </div>
-
-
-                            <div class="event-description">
-
-                                ${escapeHtml(
-                                    event.description || ""
-                                )}
-
-                            </div>
+                            ${count}
 
                         </div>
-                    `;
-                }
-            )
-            .join("");
+
+                    </div>
+                `;
+            }
+        )
+        .join("");
 }
 
-
-/* =========================================================
-   FOCUS EVENT
-========================================================= */
-
-function focusEvent(index) {
-
-    const event =
-        eventData[index];
-
-
-    if (!event) {
-        return;
-    }
-
-
-    map.flyTo(
-        [
-            event.latitude,
-            event.longitude
-        ],
-        6,
-        {
-            duration: 1.2
-        }
-    );
-}
 
 
 /* =========================================================
    LOAD EVENTS
 ========================================================= */
 
-async function loadEvents() {
+async function loadEarthquakes() {
 
     try {
 
@@ -1016,115 +1408,54 @@ async function loadEvents() {
             );
 
 
-        if (!response.ok) {
-
-            throw new Error(
-                "Event request failed"
-            );
-        }
-
-
-        eventData =
+        const data =
             await response.json();
 
 
-        renderEvents(
-            eventData
+        earthquakeData =
+            data.events
+            || [];
+
+
+        renderEarthquakes(
+            earthquakeData
         );
+
+
+        document
+            .getElementById(
+                "dataSourceStatus"
+            )
+            .textContent =
+            data.live
+            ?
+            "USGS LIVE"
+            :
+            "USGS CACHE";
 
     }
 
     catch (error) {
 
         console.error(
-            "Event loading error:",
+            "Earthquake load error:",
             error
         );
+
+
+        document
+            .getElementById(
+                "dataSourceStatus"
+            )
+            .textContent =
+            "USGS OFFLINE";
     }
 }
 
 
-/* =========================================================
-   LOCATION WEBSOCKET
-========================================================= */
-
-function connectLocationSocket() {
-
-    const protocol =
-        window.location.protocol
-        === "https:"
-        ? "wss"
-        : "ws";
-
-
-    locationSocket =
-        new WebSocket(
-            `${protocol}://${window.location.hostname}:8000/ws/locations`
-        );
-
-
-    locationSocket.onopen =
-        () => {
-
-            console.log(
-                "Location WebSocket connected"
-            );
-        };
-
-
-    locationSocket.onmessage =
-        event => {
-
-            try {
-
-                const message =
-                    JSON.parse(
-                        event.data
-                    );
-
-
-                if (
-                    message.type
-                    === "locations"
-                ) {
-
-                    infrastructureData =
-                        message.data;
-
-
-                    applyFilters();
-                }
-
-            }
-
-            catch (error) {
-
-                console.error(
-                    "Location WebSocket message error:",
-                    error
-                );
-            }
-        };
-
-
-    locationSocket.onclose =
-        () => {
-
-            console.log(
-                "Location WebSocket disconnected"
-            );
-
-
-            setTimeout(
-                connectLocationSocket,
-                5000
-            );
-        };
-}
-
 
 /* =========================================================
-   EVENT WEBSOCKET
+   WEBSOCKET EVENTS
 ========================================================= */
 
 function connectEventSocket() {
@@ -1132,8 +1463,10 @@ function connectEventSocket() {
     const protocol =
         window.location.protocol
         === "https:"
-        ? "wss"
-        : "ws";
+        ?
+        "wss"
+        :
+        "ws";
 
 
     eventSocket =
@@ -1146,46 +1479,41 @@ function connectEventSocket() {
         () => {
 
             console.log(
-                "Event WebSocket connected"
+                "USGS live WebSocket connected"
             );
         };
 
 
     eventSocket.onmessage =
-        event => {
+        async event => {
 
-            try {
-
-                const message =
-                    JSON.parse(
-                        event.data
-                    );
+            const message =
+                JSON.parse(
+                    event.data
+                );
 
 
-                if (
-                    message.type
-                    === "events"
-                ) {
+            if (
+                message.type
+                === "earthquakes"
+            ) {
 
-                    eventData =
-                        message.data;
-
-
-                    renderEvents(
-                        eventData
-                    );
+                earthquakeData =
+                    message.data
+                    || [];
 
 
-                    loadAnalytics();
-                }
+                renderEarthquakes(
+                    earthquakeData
+                );
 
-            }
 
-            catch (error) {
-
-                console.error(
-                    "Event WebSocket message error:",
-                    error
+                await Promise.all(
+                    [
+                        loadRisk(),
+                        loadAnalytics(),
+                        loadLocations()
+                    ]
                 );
             }
         };
@@ -1193,11 +1521,6 @@ function connectEventSocket() {
 
     eventSocket.onclose =
         () => {
-
-            console.log(
-                "Event WebSocket disconnected"
-            );
-
 
             setTimeout(
                 connectEventSocket,
@@ -1207,8 +1530,183 @@ function connectEventSocket() {
 }
 
 
+
 /* =========================================================
-   HTML ESCAPE
+   LOCATION WEBSOCKET
+========================================================= */
+
+function connectLocationSocket() {
+
+    const protocol =
+        window.location.protocol
+        === "https:"
+        ?
+        "wss"
+        :
+        "ws";
+
+
+    locationSocket =
+        new WebSocket(
+            `${protocol}://${window.location.hostname}:8000/ws/locations`
+        );
+
+
+    locationSocket.onmessage =
+        event => {
+
+            const message =
+                JSON.parse(
+                    event.data
+                );
+
+
+            if (
+                message.type
+                === "locations"
+            ) {
+
+                infrastructureData =
+                    message.data;
+
+                applyFilters();
+            }
+        };
+
+
+    locationSocket.onclose =
+        () => {
+
+            setTimeout(
+                connectLocationSocket,
+                5000
+            );
+        };
+}
+
+
+
+/* =========================================================
+   MAP FOCUS
+========================================================= */
+
+function focusEarthquake(
+    latitude,
+    longitude
+) {
+
+    map.flyTo(
+        [
+            latitude,
+            longitude
+        ],
+        6,
+        {
+            duration:
+                1.2
+        }
+    );
+}
+
+
+function focusAsset(
+    latitude,
+    longitude
+) {
+
+    map.flyTo(
+        [
+            latitude,
+            longitude
+        ],
+        9,
+        {
+            duration:
+                1.2
+        }
+    );
+}
+
+
+
+/* =========================================================
+   EVENT AGE
+========================================================= */
+
+function formatEventAge(timestamp) {
+
+    if (!timestamp) {
+        return "Time unavailable";
+    }
+
+
+    const eventTime =
+        new Date(
+            timestamp
+        );
+
+
+    const seconds =
+        Math.max(
+            0,
+            Math.floor(
+                (
+                    Date.now()
+                    -
+                    eventTime.getTime()
+                )
+                / 1000
+            )
+        );
+
+
+    if (seconds < 60) {
+
+        return (
+            `${seconds} sec ago`
+        );
+    }
+
+
+    const minutes =
+        Math.floor(
+            seconds / 60
+        );
+
+
+    if (minutes < 60) {
+
+        return (
+            `${minutes} min ago`
+        );
+    }
+
+
+    const hours =
+        Math.floor(
+            minutes / 60
+        );
+
+
+    if (hours < 24) {
+
+        return (
+            `${hours} hr ago`
+        );
+    }
+
+
+    return (
+        `${Math.floor(
+            hours / 24
+        )} day ago`
+    );
+}
+
+
+
+/* =========================================================
+   ESCAPE HTML
 ========================================================= */
 
 function escapeHtml(value) {
@@ -1239,8 +1737,9 @@ function escapeHtml(value) {
 }
 
 
+
 /* =========================================================
-   START APPLICATION
+   START
 ========================================================= */
 
 window.addEventListener(
@@ -1270,11 +1769,22 @@ window.addEventListener(
             );
 
 
+        document
+            .getElementById(
+                "riskFilter"
+            )
+            .addEventListener(
+                "change",
+                applyFilters
+            );
+
+
         await Promise.all(
             [
                 loadLocations(),
+                loadRisk(),
                 loadAnalytics(),
-                loadEvents()
+                loadEarthquakes()
             ]
         );
 
