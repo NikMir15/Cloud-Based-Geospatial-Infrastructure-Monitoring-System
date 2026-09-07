@@ -13,124 +13,118 @@ let locationSocket;
 let eventSocket;
 
 
+/* =========================================================
+   API CONFIG
+========================================================= */
+
 const API_URL =
     `${window.location.protocol}//${window.location.hostname}:8000`;
 
 
-// =========================================================
-// INFRASTRUCTURE COLORS
-// =========================================================
+/* =========================================================
+   INFRASTRUCTURE COLORS
+========================================================= */
 
 function getMarkerColor(type) {
 
     const colors = {
+        cloud: "#25c7ff",
+        education: "#43df8c",
+        healthcare: "#ff5468",
+        transport: "#ffc845",
+        telecom: "#c06cff",
 
-        cloud:
-            "#25c7ff",
-
-        education:
-            "#43df8c",
-
-        healthcare:
-            "#ff5468",
-
-        transport:
-            "#ffc845",
-
-        telecom:
-            "#c06cff",
-
-        sensor:
-            "#20d8ff",
-
-        traffic:
-            "#ff9f32",
-
-        environment:
-            "#47df88",
-
-        grid:
-            "#f3dc4c",
-
-        bridge:
-            "#ff5757",
-
-        coastal:
-            "#3fbaff",
-
-        tower:
-            "#a968ff"
+        sensor: "#20d8ff",
+        traffic: "#ff9f32",
+        environment: "#47df88",
+        grid: "#f3dc4c",
+        bridge: "#ff5757",
+        coastal: "#3fbaff",
+        tower: "#a968ff"
     };
-
 
     return (
         colors[
-            (type || "")
-            .toLowerCase()
+            (type || "").toLowerCase()
         ]
-        ||
-        "#cad4dc"
+        || "#cad4dc"
     );
 }
 
 
-// =========================================================
-// INITIALISE MAP
-// =========================================================
+/* =========================================================
+   INITIALISE MAP
+========================================================= */
 
 function initMap() {
 
-    map =
-        L.map(
-            "map",
-            {
-                zoomControl:
-                    false,
+    map = L.map(
+        "map",
+        {
+            zoomControl: false,
 
-                worldCopyJump:
-                    true
-            }
-        )
-        .setView(
-            [20, 5],
-            2
-        );
+            // Gives the same continuous world feel
+            // as the previous map.
+            worldCopyJump: true,
 
+            minZoom: 2
+        }
+    )
+    .setView(
+        [20, 5],
+        2
+    );
+
+
+    /* =====================================================
+       ZOOM CONTROL
+    ===================================================== */
 
     L.control
         .zoom(
             {
-                position:
-                    "bottomright"
+                position: "bottomright"
             }
         )
         .addTo(map);
 
 
+    /* =====================================================
+       OPENSTREETMAP BASEMAP
+       No CARTO API key required.
+    ===================================================== */
+
     L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+        "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         {
-            maxZoom:
-                19,
+            minZoom: 2,
+
+            maxZoom: 19,
+
+            // Important:
+            // allow world copies instead of a small
+            // rectangular world panel.
+            noWrap: false,
 
             attribution:
-                "&copy; OpenStreetMap & CARTO"
+                "&copy; OpenStreetMap contributors"
         }
     )
     .addTo(map);
 
 
+    /* =====================================================
+       CLUSTER GROUP
+    ===================================================== */
+
     clusterGroup =
         L.markerClusterGroup(
             {
-                showCoverageOnHover:
-                    false,
+                showCoverageOnHover: false,
 
-                spiderfyOnMaxZoom:
-                    true,
+                spiderfyOnMaxZoom: true,
 
-                disableClusteringAtZoom:
-                    12,
+                disableClusteringAtZoom: 12,
 
                 iconCreateFunction:
                     createClusterIcon
@@ -143,6 +137,10 @@ function initMap() {
     );
 
 
+    /* =====================================================
+       CLICK MAP → NEAREST INFRASTRUCTURE
+    ===================================================== */
+
     map.on(
         "click",
         handleMapClick
@@ -150,9 +148,9 @@ function initMap() {
 }
 
 
-// =========================================================
-// CUSTOM CLUSTER ICON
-// =========================================================
+/* =========================================================
+   CUSTOM CLUSTER ICONS
+========================================================= */
 
 function createClusterIcon(cluster) {
 
@@ -206,22 +204,20 @@ function createClusterIcon(cluster) {
                 </div>
                 `,
 
-            className:
-                "",
+            className: "",
 
-            iconSize:
-                [
-                    size,
-                    size
-                ]
+            iconSize: [
+                size,
+                size
+            ]
         }
     );
 }
 
 
-// =========================================================
-// NEAREST INFRASTRUCTURE
-// =========================================================
+/* =========================================================
+   MAP CLICK → NEAREST INFRASTRUCTURE
+========================================================= */
 
 async function handleMapClick(event) {
 
@@ -238,6 +234,14 @@ async function handleMapClick(event) {
             await fetch(
                 `${API_URL}/nearest?lat=${lat}&lon=${lon}`
             );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Nearest infrastructure request failed"
+            );
+        }
 
 
         const data =
@@ -274,8 +278,7 @@ async function handleMapClick(event) {
                 <strong>Distance:</strong>
                 ${Number(
                     data.distance_km || 0
-                ).toFixed(2)}
-                km
+                ).toFixed(2)} km
                 `
             )
             .openOn(map);
@@ -292,9 +295,9 @@ async function handleMapClick(event) {
 }
 
 
-// =========================================================
-// INFRASTRUCTURE MARKER
-// =========================================================
+/* =========================================================
+   CREATE INFRASTRUCTURE MARKER
+========================================================= */
 
 function createInfrastructureMarker(point) {
 
@@ -311,20 +314,15 @@ function createInfrastructureMarker(point) {
                 point.longitude
             ],
             {
-                radius:
-                    7,
+                radius: 7,
 
-                color:
-                    color,
+                color: color,
 
-                fillColor:
-                    color,
+                fillColor: color,
 
-                fillOpacity:
-                    0.95,
+                fillOpacity: 0.95,
 
-                weight:
-                    2
+                weight: 2
             }
         );
 
@@ -343,10 +341,12 @@ function createInfrastructureMarker(point) {
 
         <br>
 
-        <strong>Type:</strong>
+        <strong>
+            Type:
+        </strong>
 
         ${escapeHtml(
-            point.infra_type
+            point.infra_type || "Unknown"
         )}
         `
     );
@@ -356,14 +356,13 @@ function createInfrastructureMarker(point) {
 }
 
 
-// =========================================================
-// RENDER INFRASTRUCTURE
-// =========================================================
+/* =========================================================
+   RENDER INFRASTRUCTURE
+========================================================= */
 
 function renderInfrastructure(data) {
 
-    clusterGroup
-        .clearLayers();
+    clusterGroup.clearLayers();
 
 
     data.forEach(
@@ -374,25 +373,23 @@ function renderInfrastructure(data) {
                 ||
                 point.longitude == null
             ) {
-
                 return;
             }
 
 
-            clusterGroup
-                .addLayer(
-                    createInfrastructureMarker(
-                        point
-                    )
-                );
+            clusterGroup.addLayer(
+                createInfrastructureMarker(
+                    point
+                )
+            );
         }
     );
 }
 
 
-// =========================================================
-// TYPE FILTER
-// =========================================================
+/* =========================================================
+   POPULATE FILTER
+========================================================= */
 
 function populateTypeFilter(data) {
 
@@ -410,11 +407,11 @@ function populateTypeFilter(data) {
         [
             ...new Set(
                 data
-                .map(
-                    item =>
-                        item.infra_type
-                )
-                .filter(Boolean)
+                    .map(
+                        item =>
+                            item.infra_type
+                    )
+                    .filter(Boolean)
             )
         ]
         .sort();
@@ -464,36 +461,35 @@ function populateTypeFilter(data) {
 }
 
 
-// =========================================================
-// SEARCH + FILTER
-// =========================================================
+/* =========================================================
+   SEARCH + FILTER
+========================================================= */
 
 function applyFilters() {
 
     const search =
         document
-        .getElementById(
-            "searchBox"
-        )
-        .value
-        .toLowerCase()
-        .trim();
+            .getElementById(
+                "searchBox"
+            )
+            .value
+            .toLowerCase()
+            .trim();
 
 
     const selectedType =
         document
-        .getElementById(
-            "typeFilter"
-        )
-        .value;
+            .getElementById(
+                "typeFilter"
+            )
+            .value;
 
 
     const filtered =
-        infrastructureData
-        .filter(
+        infrastructureData.filter(
             item => {
 
-                const text =
+                const searchableText =
                     `
                     ${item.name || ""}
                     ${item.description || ""}
@@ -502,23 +498,22 @@ function applyFilters() {
                     .toLowerCase();
 
 
-                return (
-
-                    text.includes(
+                const matchesSearch =
+                    searchableText.includes(
                         search
-                    )
+                    );
 
+
+                const matchesType =
+                    selectedType === "all"
+                    ||
+                    item.infra_type === selectedType;
+
+
+                return (
+                    matchesSearch
                     &&
-
-                    (
-                        selectedType
-                        === "all"
-
-                        ||
-
-                        item.infra_type
-                        === selectedType
-                    )
+                    matchesType
                 );
             }
         );
@@ -530,9 +525,9 @@ function applyFilters() {
 }
 
 
-// =========================================================
-// ANALYTICS
-// =========================================================
+/* =========================================================
+   ANALYTICS
+========================================================= */
 
 async function loadAnalytics() {
 
@@ -544,6 +539,14 @@ async function loadAnalytics() {
             );
 
 
+        if (!response.ok) {
+
+            throw new Error(
+                "Analytics request failed"
+            );
+        }
+
+
         const analytics =
             await response.json();
 
@@ -553,8 +556,7 @@ async function loadAnalytics() {
                 "totalInfrastructure"
             )
             .textContent =
-            analytics.total_infrastructure
-            ?? 0;
+            analytics.total_infrastructure ?? 0;
 
 
         document
@@ -562,8 +564,7 @@ async function loadAnalytics() {
                 "activeAlerts"
             )
             .textContent =
-            analytics.active_alerts
-            ?? 0;
+            analytics.active_alerts ?? 0;
 
 
         document
@@ -571,8 +572,7 @@ async function loadAnalytics() {
                 "highRisk"
             )
             .textContent =
-            analytics.high_risk_assets
-            ?? 0;
+            analytics.high_risk_assets ?? 0;
 
 
         document
@@ -580,13 +580,11 @@ async function loadAnalytics() {
                 "criticalEvents"
             )
             .textContent =
-            analytics.critical_events
-            ?? 0;
+            analytics.critical_events ?? 0;
 
 
         renderTypeStats(
-            analytics.by_type
-            || {}
+            analytics.by_type || {}
         );
 
     }
@@ -601,9 +599,9 @@ async function loadAnalytics() {
 }
 
 
-// =========================================================
-// TYPE STATISTICS
-// =========================================================
+/* =========================================================
+   TYPE STATISTICS
+========================================================= */
 
 function renderTypeStats(stats) {
 
@@ -613,49 +611,65 @@ function renderTypeStats(stats) {
         );
 
 
+    const entries =
+        Object.entries(stats);
+
+
+    if (entries.length === 0) {
+
+        container.innerHTML =
+            `
+            <div class="empty-state">
+                No infrastructure statistics.
+            </div>
+            `;
+
+        return;
+    }
+
+
     container.innerHTML =
-        Object
-        .entries(stats)
-        .map(
-            ([type, count]) => {
+        entries
+            .map(
+                ([type, count]) => {
 
-                const color =
-                    getMarkerColor(
-                        type
-                    );
+                    const color =
+                        getMarkerColor(
+                            type
+                        );
 
 
-                return `
-                    <div class="type-stat">
+                    return `
+                        <div class="type-stat">
 
-                        <div class="type-stat-name">
+                            <div class="type-stat-name">
 
-                            <span
-                                class="type-color-dot"
-                                style="
-                                    background:${color}
-                                "
-                            ></span>
+                                <span
+                                    class="type-color-dot"
+                                    style="
+                                        background:${color}
+                                    "
+                                ></span>
 
-                            ${escapeHtml(type)}
+                                ${escapeHtml(type)}
+
+                            </div>
+
+                            <div class="type-stat-count">
+                                ${count}
+                            </div>
 
                         </div>
-
-                        <div class="type-stat-count">
-                            ${count}
-                        </div>
-
-                    </div>
-                `;
-            }
-        )
-        .join("");
+                    `;
+                }
+            )
+            .join("");
 }
 
 
-// =========================================================
-// LOAD INFRASTRUCTURE
-// =========================================================
+/* =========================================================
+   LOAD INFRASTRUCTURE
+========================================================= */
 
 async function loadLocations() {
 
@@ -665,6 +679,14 @@ async function loadLocations() {
             await fetch(
                 `${API_URL}/locations`
             );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Infrastructure request failed"
+            );
+        }
 
 
         infrastructureData =
@@ -685,53 +707,63 @@ async function loadLocations() {
     catch (error) {
 
         console.error(
-            "Infrastructure load error:",
+            "Infrastructure loading error:",
             error
         );
     }
 }
 
 
-// =========================================================
-// EVENT COLOR
-// =========================================================
+/* =========================================================
+   EVENT SEVERITY COLOR
+========================================================= */
 
 function getEventColor(event) {
 
     const severity =
-        event.severity
-        ?.toLowerCase();
+        (event.severity || "")
+            .toLowerCase();
 
 
     if (severity === "critical") {
+
         return "#ff4b5c";
     }
 
 
     if (severity === "high") {
+
         return "#ff853d";
     }
 
 
-    return "#ffc845";
+    if (severity === "medium") {
+
+        return "#ffc845";
+    }
+
+
+    return "#25c7ff";
 }
 
 
-// =========================================================
-// RENDER HAZARDS
-// =========================================================
+/* =========================================================
+   RENDER EVENTS
+========================================================= */
 
 function renderEvents(events) {
 
-    eventLayers
-        .forEach(
-            layer =>
-                map.removeLayer(layer)
-        );
+    eventLayers.forEach(
+        layer => {
+
+            map.removeLayer(
+                layer
+            );
+        }
+    );
 
 
-    eventLayers =
-        [];
+    eventLayers = [];
 
 
     events.forEach(
@@ -745,11 +777,12 @@ function renderEvents(events) {
 
             const radius =
                 Number(
-                    event.radius_km
-                    || 50
+                    event.radius_km || 50
                 )
                 * 1000;
 
+
+            /* Hazard radius */
 
             const zone =
                 L.circle(
@@ -758,20 +791,15 @@ function renderEvents(events) {
                         event.longitude
                     ],
                     {
-                        radius:
-                            radius,
+                        radius: radius,
 
-                        color:
-                            color,
+                        color: color,
 
-                        fillColor:
-                            color,
+                        fillColor: color,
 
-                        fillOpacity:
-                            0.09,
+                        fillOpacity: 0.08,
 
-                        weight:
-                            1.5,
+                        weight: 2,
 
                         dashArray:
                             "6 5"
@@ -780,6 +808,8 @@ function renderEvents(events) {
                 .addTo(map);
 
 
+            /* Hazard centre */
+
             const marker =
                 L.circleMarker(
                     [
@@ -787,20 +817,15 @@ function renderEvents(events) {
                         event.longitude
                     ],
                     {
-                        radius:
-                            9,
+                        radius: 9,
 
-                        color:
-                            "#ffffff",
+                        color: "#ffffff",
 
-                        fillColor:
-                            color,
+                        fillColor: color,
 
-                        fillOpacity:
-                            1,
+                        fillOpacity: 1,
 
-                        weight:
-                            2
+                        weight: 2
                     }
                 )
                 .addTo(map);
@@ -809,18 +834,24 @@ function renderEvents(events) {
             marker.bindPopup(
                 `
                 <strong>
-                    ${escapeHtml(event.title)}
+                    ${escapeHtml(
+                        event.title
+                    )}
                 </strong>
 
                 <br><br>
 
-                <strong>Event:</strong>
-                ${escapeHtml(event.event_type)}
+                <strong>Type:</strong>
+                ${escapeHtml(
+                    event.event_type
+                )}
 
                 <br>
 
                 <strong>Severity:</strong>
-                ${escapeHtml(event.severity)}
+                ${escapeHtml(
+                    event.severity
+                )}
 
                 <br>
 
@@ -830,7 +861,7 @@ function renderEvents(events) {
                 <br><br>
 
                 ${escapeHtml(
-                    event.description
+                    event.description || ""
                 )}
                 `
             );
@@ -850,9 +881,9 @@ function renderEvents(events) {
 }
 
 
-// =========================================================
-// EVENT FEED
-// =========================================================
+/* =========================================================
+   EVENT FEED
+========================================================= */
 
 function renderEventFeed(events) {
 
@@ -862,9 +893,7 @@ function renderEventFeed(events) {
         );
 
 
-    if (
-        events.length === 0
-    ) {
+    if (events.length === 0) {
 
         container.innerHTML =
             `
@@ -879,73 +908,75 @@ function renderEventFeed(events) {
 
     container.innerHTML =
         events
-        .map(
-            (event, index) => {
+            .map(
+                (event, index) => {
 
-                return `
-                    <div
-                        class="event-card"
-                        onclick="
-                            focusEvent(${index})
-                        "
-                    >
+                    return `
+                        <div
+                            class="event-card"
+                            onclick="focusEvent(${index})"
+                        >
 
-                        <div class="event-header">
+                            <div class="event-header">
 
-                            <span class="event-title">
-                                ${escapeHtml(
-                                    event.title
-                                )}
-                            </span>
+                                <span class="event-title">
 
-                            <span
-                                class="
-                                    severity
+                                    ${escapeHtml(
+                                        event.title
+                                    )}
+
+                                </span>
+
+                                <span
+                                    class="
+                                        severity
+                                        ${escapeHtml(
+                                            event.severity
+                                        )}
+                                    "
+                                >
+
                                     ${escapeHtml(
                                         event.severity
                                     )}
-                                "
-                            >
+
+                                </span>
+
+                            </div>
+
+
+                            <div class="event-type">
+
                                 ${escapeHtml(
-                                    event.severity
+                                    event.event_type
                                 )}
-                            </span>
+
+                                ·
+
+                                ${event.radius_km} km radius
+
+                            </div>
+
+
+                            <div class="event-description">
+
+                                ${escapeHtml(
+                                    event.description || ""
+                                )}
+
+                            </div>
 
                         </div>
-
-
-                        <div class="event-type">
-
-                            ${escapeHtml(
-                                event.event_type
-                            )}
-
-                            ·
-
-                            ${event.radius_km} km radius
-
-                        </div>
-
-
-                        <div class="event-description">
-
-                            ${escapeHtml(
-                                event.description
-                            )}
-
-                        </div>
-
-                    </div>
-                `;
-            }
-        )
-        .join("");
+                    `;
+                }
+            )
+            .join("");
 }
 
 
-// =========================================================
-// FOCUS EVENT
-// =========================================================
+/* =========================================================
+   FOCUS EVENT
+========================================================= */
 
 function focusEvent(index) {
 
@@ -965,16 +996,15 @@ function focusEvent(index) {
         ],
         6,
         {
-            duration:
-                1.3
+            duration: 1.2
         }
     );
 }
 
 
-// =========================================================
-// LOAD EVENTS
-// =========================================================
+/* =========================================================
+   LOAD EVENTS
+========================================================= */
 
 async function loadEvents() {
 
@@ -984,6 +1014,14 @@ async function loadEvents() {
             await fetch(
                 `${API_URL}/events`
             );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Event request failed"
+            );
+        }
 
 
         eventData =
@@ -999,16 +1037,16 @@ async function loadEvents() {
     catch (error) {
 
         console.error(
-            "Event load error:",
+            "Event loading error:",
             error
         );
     }
 }
 
 
-// =========================================================
-// LOCATION WEBSOCKET
-// =========================================================
+/* =========================================================
+   LOCATION WEBSOCKET
+========================================================= */
 
 function connectLocationSocket() {
 
@@ -1025,31 +1063,57 @@ function connectLocationSocket() {
         );
 
 
+    locationSocket.onopen =
+        () => {
+
+            console.log(
+                "Location WebSocket connected"
+            );
+        };
+
+
     locationSocket.onmessage =
         event => {
 
-            const message =
-                JSON.parse(
-                    event.data
+            try {
+
+                const message =
+                    JSON.parse(
+                        event.data
+                    );
+
+
+                if (
+                    message.type
+                    === "locations"
+                ) {
+
+                    infrastructureData =
+                        message.data;
+
+
+                    applyFilters();
+                }
+
+            }
+
+            catch (error) {
+
+                console.error(
+                    "Location WebSocket message error:",
+                    error
                 );
-
-
-            if (
-                message.type
-                === "locations"
-            ) {
-
-                infrastructureData =
-                    message.data;
-
-
-                applyFilters();
             }
         };
 
 
     locationSocket.onclose =
         () => {
+
+            console.log(
+                "Location WebSocket disconnected"
+            );
+
 
             setTimeout(
                 connectLocationSocket,
@@ -1059,9 +1123,9 @@ function connectLocationSocket() {
 }
 
 
-// =========================================================
-// EVENT WEBSOCKET
-// =========================================================
+/* =========================================================
+   EVENT WEBSOCKET
+========================================================= */
 
 function connectEventSocket() {
 
@@ -1078,36 +1142,62 @@ function connectEventSocket() {
         );
 
 
+    eventSocket.onopen =
+        () => {
+
+            console.log(
+                "Event WebSocket connected"
+            );
+        };
+
+
     eventSocket.onmessage =
         event => {
 
-            const message =
-                JSON.parse(
-                    event.data
+            try {
+
+                const message =
+                    JSON.parse(
+                        event.data
+                    );
+
+
+                if (
+                    message.type
+                    === "events"
+                ) {
+
+                    eventData =
+                        message.data;
+
+
+                    renderEvents(
+                        eventData
+                    );
+
+
+                    loadAnalytics();
+                }
+
+            }
+
+            catch (error) {
+
+                console.error(
+                    "Event WebSocket message error:",
+                    error
                 );
-
-
-            if (
-                message.type
-                === "events"
-            ) {
-
-                eventData =
-                    message.data;
-
-
-                renderEvents(
-                    eventData
-                );
-
-
-                loadAnalytics();
             }
         };
 
 
     eventSocket.onclose =
         () => {
+
+            console.log(
+                "Event WebSocket disconnected"
+            );
+
 
             setTimeout(
                 connectEventSocket,
@@ -1117,9 +1207,9 @@ function connectEventSocket() {
 }
 
 
-// =========================================================
-// ESCAPE HTML
-// =========================================================
+/* =========================================================
+   HTML ESCAPE
+========================================================= */
 
 function escapeHtml(value) {
 
@@ -1149,9 +1239,9 @@ function escapeHtml(value) {
 }
 
 
-// =========================================================
-// START
-// =========================================================
+/* =========================================================
+   START APPLICATION
+========================================================= */
 
 window.addEventListener(
     "load",

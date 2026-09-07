@@ -3,19 +3,30 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 
+from datetime import datetime, timezone
+
 import asyncio
 import os
 import random
-from datetime import datetime, timezone
 
 
 # =========================================================
-# CONFIG
+# ENVIRONMENT
 # =========================================================
 
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL environment variable is not configured"
+    )
+
+
+# =========================================================
+# DATABASE
+# =========================================================
 
 engine = create_engine(
     DATABASE_URL,
@@ -23,9 +34,16 @@ engine = create_engine(
 )
 
 
+# =========================================================
+# FASTAPI
+# =========================================================
+
 app = FastAPI(
     title="Infrastructure Situational Awareness Platform",
-    description="Cloud-Based Geospatial Infrastructure Monitoring System",
+    description=(
+        "Cloud-Based Geospatial Infrastructure Monitoring System "
+        "using FastAPI, PostgreSQL/PostGIS, Docker and Leaflet."
+    ),
     version="3.0.0"
 )
 
@@ -44,7 +62,7 @@ app.add_middleware(
 
 
 # =========================================================
-# DATABASE
+# DATABASE HELPERS
 # =========================================================
 
 def load_locations():
@@ -63,17 +81,42 @@ def load_locations():
 
     with engine.connect() as conn:
 
-        result = conn.execute(query)
+        rows = conn.execute(query).fetchall()
 
-        return [
-            dict(row._mapping)
-            for row in result
-        ]
+    return [
+        dict(row._mapping)
+        for row in rows
+    ]
+
+
+def load_type_statistics():
+
+    query = text("""
+        SELECT
+            infra_type,
+            COUNT(*) AS count
+        FROM infrastructure_points
+        GROUP BY infra_type
+        ORDER BY count DESC, infra_type;
+    """)
+
+    with engine.connect() as conn:
+
+        rows = conn.execute(query).fetchall()
+
+    return {
+        row.infra_type: row.count
+        for row in rows
+    }
 
 
 # =========================================================
 # SIMULATED HAZARD EVENTS
-# Later this will be replaced with real external feeds.
+# =========================================================
+#
+# These are intentionally simulated for now.
+# Later we can replace these with real external feeds.
+#
 # =========================================================
 
 hazard_events = [
@@ -85,7 +128,7 @@ hazard_events = [
         "latitude": 28.60,
         "longitude": 77.20,
         "radius_km": 180,
-        "description": "Simulated magnitude 5.4 seismic event",
+        "description": "Simulated magnitude 5.4 seismic event"
     },
     {
         "id": "FL-001",
@@ -95,7 +138,7 @@ hazard_events = [
         "latitude": 53.48,
         "longitude": -2.24,
         "radius_km": 90,
-        "description": "Simulated regional flood warning",
+        "description": "Simulated regional flood warning"
     },
     {
         "id": "ST-001",
@@ -105,19 +148,21 @@ hazard_events = [
         "latitude": 51.50,
         "longitude": -0.12,
         "radius_km": 120,
-        "description": "Simulated severe weather system",
-    },
+        "description": "Simulated severe weather system"
+    }
 ]
 
 
 def get_hazard_events():
 
-    now = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(
+        timezone.utc
+    ).isoformat()
 
     return [
         {
             **event,
-            "timestamp": now
+            "timestamp": timestamp
         }
         for event in hazard_events
     ]
@@ -128,7 +173,7 @@ def get_hazard_events():
 # =========================================================
 
 @app.get("/")
-def home():
+def root():
 
     return {
         "project": "Infrastructure Situational Awareness Platform",
@@ -138,7 +183,7 @@ def home():
 
 
 # =========================================================
-# HEALTH
+# HEALTH CHECK
 # =========================================================
 
 @app.get("/health")
@@ -147,12 +192,14 @@ def health():
     try:
 
         with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
+            conn.execute(
+                text("SELECT 1")
+            )
 
         return {
             "status": "healthy",
             "database": "connected",
-            "events": "available"
+            "event_service": "available"
         }
 
     except Exception as exc:
@@ -160,16 +207,17 @@ def health():
         return {
             "status": "unhealthy",
             "database": "disconnected",
+            "event_service": "unknown",
             "error": str(exc)
         }
 
 
 # =========================================================
-# LOCATIONS
+# INFRASTRUCTURE LOCATIONS
 # =========================================================
 
 @app.get("/locations")
-def locations():
+def get_locations():
 
     return load_locations()
 
@@ -179,7 +227,7 @@ def locations():
 # =========================================================
 
 @app.get("/analytics")
-def analytics():
+def get_analytics():
 
     with engine.connect() as conn:
 
@@ -190,21 +238,7 @@ def analytics():
             """)
         ).scalar()
 
-        rows = conn.execute(
-            text("""
-                SELECT
-                    infra_type,
-                    COUNT(*) AS count
-                FROM infrastructure_points
-                GROUP BY infra_type
-                ORDER BY count DESC;
-            """)
-        ).fetchall()
-
-    by_type = {
-        row.infra_type: row.count
-        for row in rows
-    }
+    by_type = load_type_statistics()
 
     events = get_hazard_events()
 
@@ -213,7 +247,10 @@ def analytics():
     high_risk_assets = sum(
         1
         for event in events
-        if event["severity"] in ["high", "critical"]
+        if event["severity"] in {
+            "high",
+            "critical"
+        }
     )
 
     critical_events = sum(
@@ -232,22 +269,15 @@ def analytics():
 
 
 # =========================================================
-# EVENTS
-# =========================================================
-
-@app.get("/events")
-def events():
-
-    return get_hazard_events()
-
-
-# =========================================================
 # SEARCH
 # =========================================================
 
 @app.get("/search")
-def search(
-    q: str = Query(..., min_length=1)
+def search_infrastructure(
+    q: str = Query(
+        ...,
+        min_length=1
+    )
 ):
 
     query = text("""
@@ -261,25 +291,29 @@ def search(
         FROM infrastructure_points
         WHERE
             LOWER(name) LIKE LOWER(:search)
-            OR LOWER(description) LIKE LOWER(:search)
-            OR LOWER(infra_type) LIKE LOWER(:search)
+            OR
+            LOWER(COALESCE(description, ''))
+                LIKE LOWER(:search)
+            OR
+            LOWER(COALESCE(infra_type, ''))
+                LIKE LOWER(:search)
         ORDER BY name
-        LIMIT 30;
+        LIMIT 50;
     """)
 
     with engine.connect() as conn:
 
-        result = conn.execute(
+        rows = conn.execute(
             query,
             {
                 "search": f"%{q}%"
             }
-        )
+        ).fetchall()
 
-        return [
-            dict(row._mapping)
-            for row in result
-        ]
+    return [
+        dict(row._mapping)
+        for row in rows
+    ]
 
 
 # =========================================================
@@ -287,7 +321,7 @@ def search(
 # =========================================================
 
 @app.get("/nearest")
-def nearest(
+def nearest_infrastructure(
     lat: float,
     lon: float
 ):
@@ -300,10 +334,10 @@ def nearest(
             infra_type,
 
             ST_Y(location::geometry)
-            AS latitude,
+                AS latitude,
 
             ST_X(location::geometry)
-            AS longitude,
+                AS longitude,
 
             ST_Distance(
                 location::geography,
@@ -312,7 +346,7 @@ def nearest(
                     4326
                 )::geography
             )
-            AS distance_meters
+                AS distance_meters
 
         FROM infrastructure_points
 
@@ -343,14 +377,20 @@ def nearest(
             "message": "No infrastructure found"
         }
 
-    data = dict(row._mapping)
+    data = dict(
+        row._mapping
+    )
 
     data["distance_meters"] = float(
-        data["distance_meters"] or 0
+        data.get(
+            "distance_meters"
+        )
+        or 0
     )
 
     data["distance_km"] = round(
-        data["distance_meters"] / 1000,
+        data["distance_meters"]
+        / 1000,
         2
     )
 
@@ -358,11 +398,21 @@ def nearest(
 
 
 # =========================================================
-# LOCATION WEBSOCKET
+# HAZARD EVENTS
+# =========================================================
+
+@app.get("/events")
+def events():
+
+    return get_hazard_events()
+
+
+# =========================================================
+# INFRASTRUCTURE WEBSOCKET
 # =========================================================
 
 @app.websocket("/ws/locations")
-async def websocket_locations(
+async def locations_websocket(
     websocket: WebSocket
 ):
 
@@ -372,7 +422,9 @@ async def websocket_locations(
 
         while True:
 
-            await asyncio.sleep(5)
+            await asyncio.sleep(
+                5
+            )
 
             await websocket.send_json(
                 {
@@ -382,7 +434,11 @@ async def websocket_locations(
             )
 
     except Exception:
-        pass
+
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 # =========================================================
@@ -390,7 +446,7 @@ async def websocket_locations(
 # =========================================================
 
 @app.websocket("/ws/events")
-async def websocket_events(
+async def events_websocket(
     websocket: WebSocket
 ):
 
@@ -400,31 +456,51 @@ async def websocket_events(
 
         while True:
 
-            await asyncio.sleep(8)
-
-            # Slightly vary simulated event positions
-            # to demonstrate a live event stream.
+            await asyncio.sleep(
+                8
+            )
 
             events = get_hazard_events()
 
+            simulated_events = []
+
             for event in events:
 
-                event["latitude"] += random.uniform(
+                updated_event = {
+                    **event
+                }
+
+                # Small movement to demonstrate
+                # a live event data stream.
+
+                updated_event[
+                    "latitude"
+                ] += random.uniform(
                     -0.03,
                     0.03
                 )
 
-                event["longitude"] += random.uniform(
+                updated_event[
+                    "longitude"
+                ] += random.uniform(
                     -0.03,
                     0.03
+                )
+
+                simulated_events.append(
+                    updated_event
                 )
 
             await websocket.send_json(
                 {
                     "type": "events",
-                    "data": events
+                    "data": simulated_events
                 }
             )
 
     except Exception:
-        pass
+
+        try:
+            await websocket.close()
+        except Exception:
+            pass

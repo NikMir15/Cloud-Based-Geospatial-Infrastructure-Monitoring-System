@@ -29,17 +29,13 @@ body {
 
 
 /* =========================================================
-   FULL SCREEN MAP
+   FULL-SCREEN MAP
 ========================================================= */
 
 #map {
-
     position: fixed;
 
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
+    inset: 0;
 
     width: 100vw;
     height: 100vh;
@@ -51,11 +47,24 @@ body {
 
 
 /* =========================================================
-   LEFT COMMAND PANEL
+   DARK OSM MAP
+========================================================= */
+
+.leaflet-tile-pane {
+    filter:
+        invert(100%)
+        hue-rotate(180deg)
+        brightness(58%)
+        contrast(120%)
+        saturate(65%);
+}
+
+
+/* =========================================================
+   COMMAND PANEL
 ========================================================= */
 
 .command-panel {
-
     position: fixed;
 
     top: 16px;
@@ -93,7 +102,6 @@ body {
 ========================================================= */
 
 .brand-row {
-
     display: flex;
 
     align-items: flex-start;
@@ -105,23 +113,19 @@ body {
     margin-bottom: 20px;
 }
 
-
 .eyebrow {
-
     margin-bottom: 5px;
+
+    color: #668096;
 
     font-size: 10px;
 
     font-weight: 800;
 
     letter-spacing: 1.8px;
-
-    color: #668096;
 }
 
-
 .brand-row h1 {
-
     margin: 0;
 
     font-size: 20px;
@@ -135,7 +139,6 @@ body {
 ========================================================= */
 
 .status-badge {
-
     padding: 6px 8px;
 
     border-radius: 999px;
@@ -147,9 +150,7 @@ body {
     letter-spacing: 1px;
 }
 
-
 .status-badge.online {
-
     color: #5effa5;
 
     border:
@@ -166,13 +167,10 @@ body {
 ========================================================= */
 
 .control-section {
-
     margin-bottom: 13px;
 }
 
-
 .control-section label {
-
     display: block;
 
     margin-bottom: 6px;
@@ -186,10 +184,8 @@ body {
     letter-spacing: 0.8px;
 }
 
-
 .control-section input,
 .control-section select {
-
     width: 100%;
 
     padding: 11px 12px;
@@ -207,17 +203,20 @@ body {
     background: #0b131b;
 }
 
+.control-section input::placeholder {
+    color: #5e7284;
+}
 
 .control-section input:focus,
 .control-section select:focus {
+    border-color: #25c7ff;
 
-    border-color:
-        #25c7ff;
+    box-shadow:
+        0 0 0 2px
+        rgba(37,199,255,0.08);
 }
 
-
 .control-section select option {
-
     color: white;
 
     background: #0b131b;
@@ -225,11 +224,10 @@ body {
 
 
 /* =========================================================
-   KPI CARDS
+   KPI GRID
 ========================================================= */
 
 .kpi-grid {
-
     display: grid;
 
     grid-template-columns:
@@ -240,9 +238,7 @@ body {
     margin-top: 18px;
 }
 
-
 .kpi-card {
-
     min-height: 85px;
 
     padding: 13px;
@@ -257,9 +253,7 @@ body {
         rgba(255,255,255,0.025);
 }
 
-
 .kpi-card span {
-
     display: block;
 
     margin-bottom: 8px;
@@ -269,24 +263,19 @@ body {
     font-size: 10px;
 }
 
-
 .kpi-card strong {
+    color: #edf5f9;
 
     font-size: 26px;
-
-    color: #edf5f9;
 }
-
 
 .alert-card strong {
     color: #ffc044;
 }
 
-
 .risk-card strong {
     color: #ff843d;
 }
-
 
 .critical-card strong {
     color: #ff4b5c;
@@ -294,11 +283,10 @@ body {
 
 
 /* =========================================================
-   SECTIONS
+   PANEL SECTIONS
 ========================================================= */
 
 .panel-section {
-
     margin-top: 20px;
 
     padding-top: 16px;
@@ -308,9 +296,7 @@ body {
         rgba(255,255,255,0.07);
 }
 
-
 .section-title {
-
     margin-bottom: 11px;
 
     color: #657d90;
@@ -322,9 +308,7 @@ body {
     letter-spacing: 1.5px;
 }
 
-
 .section-title-row {
-
     display: flex;
 
     align-items: center;
@@ -338,7 +322,6 @@ body {
 ========================================================= */
 
 .type-stat {
-
     display: flex;
 
     align-items: center;
@@ -352,9 +335,7 @@ body {
         rgba(255,255,255,0.035);
 }
 
-
 .type-stat-name {
-
     display: flex;
 
     align-items: center;
@@ -366,9 +347,7 @@ body {
     font-size: 11px;
 }
 
-
 .type-stat-count {
-
     color: white;
 
     font-size: 11px;
@@ -376,9 +355,7 @@ body {
     font-weight: 700;
 }
 
-
 .type-color-dot {
-
     width: 7px;
     height: 7px;
 
@@ -391,7 +368,6 @@ body {
 ========================================================= */
 
 .live-dot {
-
     width: 7px;
     height: 7px;
 
@@ -402,12 +378,11 @@ body {
     background: #5cff9f;
 
     box-shadow:
-        0 0 12px #5cff9f;
+        0 0 12px
+        #5cff9f;
 }
 
-
 .event-feed {
-
     display: flex;
 
     flex-direction: column;
@@ -415,9 +390,7 @@ body {
     gap: 8px;
 }
 
-
 .event-card {
-
     padding: 11px;
 
     cursor: pointer;
@@ -435,9 +408,7 @@ body {
         0.2s ease;
 }
 
-
 .event-card:hover {
-
     transform:
         translateX(2px);
 
@@ -445,9 +416,7 @@ body {
         rgba(255,255,255,0.045);
 }
 
-
 .event-header {
-
     display: flex;
 
     align-items: center;
@@ -457,9 +426,7 @@ body {
     gap: 10px;
 }
 
-
 .event-title {
-
     color: #e8f1f6;
 
     font-size: 11px;
@@ -467,9 +434,7 @@ body {
     font-weight: 700;
 }
 
-
 .event-type {
-
     margin-top: 5px;
 
     color: #8298a8;
@@ -477,9 +442,7 @@ body {
     font-size: 10px;
 }
 
-
 .event-description {
-
     margin-top: 6px;
 
     color: #60798c;
@@ -490,8 +453,11 @@ body {
 }
 
 
-.severity {
+/* =========================================================
+   SEVERITY BADGES
+========================================================= */
 
+.severity {
     padding: 4px 6px;
 
     border-radius: 999px;
@@ -503,27 +469,21 @@ body {
     text-transform: uppercase;
 }
 
-
 .severity.medium {
-
     color: #ffd25b;
 
     background:
         rgba(255,210,91,0.08);
 }
 
-
 .severity.high {
-
     color: #ff8a42;
 
     background:
         rgba(255,138,66,0.08);
 }
 
-
 .severity.critical {
-
     color: #ff5365;
 
     background:
@@ -532,11 +492,29 @@ body {
 
 
 /* =========================================================
-   LEGEND
+   EMPTY STATE
+========================================================= */
+
+.empty-state {
+    padding: 12px;
+
+    color: #8298a8;
+
+    border:
+        1px dashed
+        rgba(255,255,255,0.08);
+
+    border-radius: 8px;
+
+    font-size: 10px;
+}
+
+
+/* =========================================================
+   MAP LEGEND
 ========================================================= */
 
 .map-legend {
-
     position: fixed;
 
     left: 365px;
@@ -565,9 +543,7 @@ body {
         rgba(0,0,0,0.45);
 }
 
-
 .legend-title {
-
     margin-bottom: 7px;
 
     color: #6c8395;
@@ -579,15 +555,11 @@ body {
     letter-spacing: 1.1px;
 }
 
-
 .hazard-title {
-
     margin-top: 10px;
 }
 
-
 .legend-row {
-
     display: flex;
 
     flex-wrap: wrap;
@@ -595,9 +567,7 @@ body {
     gap: 10px;
 }
 
-
 .legend-row span {
-
     display: inline-flex;
 
     align-items: center;
@@ -607,9 +577,7 @@ body {
     font-size: 9px;
 }
 
-
 .legend-dot {
-
     display: inline-block;
 
     width: 7px;
@@ -622,7 +590,7 @@ body {
 
 
 /* =========================================================
-   COLORS
+   LEGEND COLORS
 ========================================================= */
 
 .cloud {
@@ -663,7 +631,6 @@ body {
 ========================================================= */
 
 .custom-cluster {
-
     display: flex;
 
     align-items: center;
@@ -674,6 +641,8 @@ body {
 
     color: white;
 
+    font-size: 12px;
+
     font-weight: 800;
 
     border:
@@ -681,81 +650,39 @@ body {
         rgba(255,255,255,0.65);
 }
 
-
 .cluster-low {
-
     background:
-        rgba(37,199,255,0.85);
+        rgba(37,199,255,0.88);
 
     box-shadow:
         0 0 18px
-        rgba(37,199,255,0.60);
+        rgba(37,199,255,0.65);
 }
 
-
 .cluster-medium {
-
     background:
-        rgba(255,192,68,0.90);
+        rgba(255,192,68,0.92);
 
     box-shadow:
         0 0 20px
-        rgba(255,192,68,0.65);
+        rgba(255,192,68,0.70);
 }
-
 
 .cluster-high {
-
     background:
-        rgba(255,75,92,0.90);
+        rgba(255,75,92,0.92);
 
     box-shadow:
-        0 0 22px
-        rgba(255,75,92,0.70);
+        0 0 24px
+        rgba(255,75,92,0.75);
 }
 
 
 /* =========================================================
-   HAZARD MARKERS
-========================================================= */
-
-.hazard-marker {
-
-    border-radius: 50%;
-
-    border:
-        2px solid white;
-
-    box-shadow:
-        0 0 18px
-        currentColor;
-}
-
-
-.hazard-earthquake {
-
-    background: #ff4b5c;
-}
-
-
-.hazard-flood {
-
-    background: #28a9ff;
-}
-
-
-.hazard-storm {
-
-    background: #b364ff;
-}
-
-
-/* =========================================================
-   LEAFLET
+   LEAFLET CONTROLS
 ========================================================= */
 
 .leaflet-control-zoom {
-
     border: 0 !important;
 
     box-shadow:
@@ -764,9 +691,7 @@ body {
         !important;
 }
 
-
 .leaflet-control-zoom a {
-
     color: white !important;
 
     border:
@@ -779,21 +704,76 @@ body {
         !important;
 }
 
+.leaflet-control-zoom a:hover {
+    background:
+        rgba(20,31,42,0.96)
+        !important;
+}
+
+
+/* =========================================================
+   POPUPS
+========================================================= */
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-
     color: #eaf2f7;
 
     background: #0b131b;
 }
 
+.leaflet-popup-content-wrapper {
+    border:
+        1px solid
+        rgba(255,255,255,0.08);
+
+    border-radius: 10px;
+
+    box-shadow:
+        0 10px 30px
+        rgba(0,0,0,0.45);
+}
 
 .leaflet-popup-content {
-
     margin: 14px;
 
+    font-size: 12px;
+
     line-height: 1.5;
+}
+
+.leaflet-popup-close-button {
+    color: #c0ced8 !important;
+}
+
+
+/* =========================================================
+   ATTRIBUTION
+========================================================= */
+
+.leaflet-control-attribution {
+    color: #7b8f9e !important;
+
+    background:
+        rgba(3,8,13,0.78)
+        !important;
+}
+
+.leaflet-control-attribution a {
+    color: #25c7ff !important;
+}
+
+
+/* =========================================================
+   DON'T FILTER OVERLAYS
+========================================================= */
+
+.leaflet-overlay-pane,
+.leaflet-marker-pane,
+.leaflet-tooltip-pane,
+.leaflet-popup-pane,
+.leaflet-control-container {
+    filter: none;
 }
 
 
@@ -806,7 +786,6 @@ body {
 }
 
 .command-panel::-webkit-scrollbar-thumb {
-
     border-radius: 20px;
 
     background: #263a49;
@@ -814,13 +793,12 @@ body {
 
 
 /* =========================================================
-   MOBILE
+   RESPONSIVE
 ========================================================= */
 
 @media (max-width: 800px) {
 
     .command-panel {
-
         top: 10px;
         bottom: 10px;
         left: 10px;
@@ -828,9 +806,15 @@ body {
         width: 285px;
     }
 
-
     .map-legend {
         display: none;
     }
 
+    .brand-row h1 {
+        font-size: 17px;
+    }
+
+    .kpi-card strong {
+        font-size: 22px;
+    }
 }
