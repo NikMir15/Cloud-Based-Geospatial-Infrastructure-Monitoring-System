@@ -16,3 +16,4 @@ backend/venv/
 
 # Logs
 *.log
+*.backup
