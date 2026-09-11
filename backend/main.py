@@ -1,8 +1,15 @@
-from fastapi import FastAPI, WebSocket, Query
+from fastapi import (
+    FastAPI,
+    WebSocket,
+    Query,
+    HTTPException
+)
+
 from fastapi.middleware.cors import CORSMiddleware
 
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field
 
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
@@ -13,7 +20,9 @@ from contextlib import asynccontextmanager
 import asyncio
 import json
 import os
+import random
 import time
+import uuid
 
 
 # =========================================================
@@ -40,6 +49,29 @@ USGS_CACHE_SECONDS = 60
 
 
 # =========================================================
+# IMPORTANT PRIVACY / PROJECT MODE
+# =========================================================
+#
+# Sensor telemetry is generated ONLY inside this FastAPI
+# application.
+#
+# It is:
+#
+# - NOT uploaded anywhere
+# - NOT sent to USGS
+# - NOT sent to another monitoring service
+# - NOT sent to a cloud provider
+#
+# USGS is READ ONLY.
+#
+# =========================================================
+
+SENSOR_MODE = "LOCAL_SIMULATION"
+
+SENSOR_UPDATE_SECONDS = 5
+
+
+# =========================================================
 # DATABASE
 # =========================================================
 
@@ -50,64 +82,125 @@ engine = create_engine(
 
 
 # =========================================================
+# LIVE SENSOR TELEMETRY
+# =========================================================
+
+sensor_telemetry = {}
+
+
+# =========================================================
 # USGS CACHE
 # =========================================================
 
 usgs_cache = {
+
     "events": [],
+
     "fetched_at": 0,
+
     "generated_at": None,
+
     "error": None
 }
 
 
 # =========================================================
-# EARTHQUAKE HELPERS
+# TEST EVENT
 # =========================================================
 
-def magnitude_severity(magnitude: float) -> str:
+test_event_state = {
 
-    if magnitude >= 6.0:
+    "event": None
+}
+
+
+# =========================================================
+# INCIDENT REGISTRY
+# =========================================================
+
+incident_registry = {}
+
+
+# =========================================================
+# REQUEST MODELS
+# =========================================================
+
+class TestEventRequest(BaseModel):
+
+    asset_id: int = Field(
+        ...,
+        gt=0
+    )
+
+    magnitude: float = Field(
+        default=5.8,
+        ge=2.5,
+        le=9.5
+    )
+
+    radius_km: float | None = Field(
+        default=None,
+        gt=0,
+        le=2000
+    )
+
+    latitude_offset: float = 0
+
+    longitude_offset: float = 0
+
+
+# =========================================================
+# GENERIC HELPERS
+# =========================================================
+
+def utc_now_iso():
+
+    return datetime.now(
+        timezone.utc
+    ).isoformat()
+
+
+def magnitude_severity(
+    magnitude
+):
+
+    if magnitude >= 6:
         return "critical"
 
-    if magnitude >= 5.0:
+    if magnitude >= 5:
         return "high"
 
-    if magnitude >= 4.0:
+    if magnitude >= 4:
         return "medium"
 
     return "low"
 
 
-def estimated_impact_radius(magnitude: float) -> float:
-    """
-    Project heuristic only.
+def estimated_impact_radius(
+    magnitude
+):
 
-    This is an estimated geographic exposure radius used
-    for demonstrating infrastructure correlation.
-
-    It is NOT an official USGS damage radius.
-    """
-
-    if magnitude >= 7.0:
+    if magnitude >= 7:
         return 600
 
-    if magnitude >= 6.0:
+    if magnitude >= 6:
         return 450
 
-    if magnitude >= 5.0:
+    if magnitude >= 5:
         return 300
 
-    if magnitude >= 4.0:
+    if magnitude >= 4:
         return 175
 
-    if magnitude >= 3.0:
+    if magnitude >= 3:
         return 90
 
     return 45
 
 
-def milliseconds_to_iso(value):
+def milliseconds_to_iso(
+    value
+):
 
     if value is None:
         return None
@@ -116,274 +209,6 @@ def milliseconds_to_iso(value):
         value / 1000,
         tz=timezone.utc
     ).isoformat()
-
-
-# =========================================================
-# FETCH LIVE USGS DATA
-# =========================================================
-
-def fetch_usgs_earthquakes(force=False):
-
-    now = time.time()
-
-    cache_age = (
-        now - usgs_cache["fetched_at"]
-        if usgs_cache["fetched_at"]
-        else None
-    )
-
-
-    if (
-        not force
-        and usgs_cache["events"]
-        and cache_age is not None
-        and cache_age < USGS_CACHE_SECONDS
-    ):
-        return {
-            "source": "USGS",
-            "live": True,
-            "cache": True,
-            "generated_at": usgs_cache["generated_at"],
-            "events": usgs_cache["events"],
-            "error": None
-        }
-
-
-    request = Request(
-        USGS_FEED_URL,
-        headers={
-            "User-Agent":
-                "GeoInfrastructureMonitoring/1.0"
-        }
-    )
-
-
-    try:
-
-        with urlopen(
-            request,
-            timeout=15
-        ) as response:
-
-            payload = json.loads(
-                response.read().decode("utf-8")
-            )
-
-
-        events = []
-
-
-        for feature in payload.get(
-            "features",
-            []
-        ):
-
-            properties = (
-                feature.get("properties")
-                or {}
-            )
-
-            geometry = (
-                feature.get("geometry")
-                or {}
-            )
-
-            coordinates = (
-                geometry.get("coordinates")
-                or []
-            )
-
-
-            if len(coordinates) < 2:
-                continue
-
-
-            longitude = coordinates[0]
-            latitude = coordinates[1]
-
-            depth = (
-                coordinates[2]
-                if len(coordinates) >= 3
-                else None
-            )
-
-
-            magnitude = properties.get(
-                "mag"
-            )
-
-
-            if magnitude is None:
-                continue
-
-
-            magnitude = float(
-                magnitude
-            )
-
-
-            event = {
-                "id":
-                    feature.get("id"),
-
-                "event_type":
-                    "earthquake",
-
-                "title":
-                    properties.get("title")
-                    or "Earthquake",
-
-                "place":
-                    properties.get("place")
-                    or "Unknown location",
-
-                "magnitude":
-                    magnitude,
-
-                "depth_km":
-                    (
-                        float(depth)
-                        if depth is not None
-                        else None
-                    ),
-
-                "latitude":
-                    float(latitude),
-
-                "longitude":
-                    float(longitude),
-
-                "timestamp":
-                    milliseconds_to_iso(
-                        properties.get("time")
-                    ),
-
-                "updated_at":
-                    milliseconds_to_iso(
-                        properties.get("updated")
-                    ),
-
-                "severity":
-                    magnitude_severity(
-                        magnitude
-                    ),
-
-                "radius_km":
-                    estimated_impact_radius(
-                        magnitude
-                    ),
-
-                "url":
-                    properties.get("url"),
-
-                "status":
-                    properties.get("status"),
-
-                "tsunami":
-                    bool(
-                        properties.get(
-                            "tsunami",
-                            0
-                        )
-                    ),
-
-                "source":
-                    "USGS",
-
-                "live":
-                    True
-            }
-
-
-            events.append(
-                event
-            )
-
-
-        generated_ms = (
-            payload
-            .get("metadata", {})
-            .get("generated")
-        )
-
-
-        generated_at = (
-            milliseconds_to_iso(
-                generated_ms
-            )
-            if generated_ms
-            else datetime.now(
-                timezone.utc
-            ).isoformat()
-        )
-
-
-        usgs_cache["events"] = events
-
-        usgs_cache["fetched_at"] = now
-
-        usgs_cache["generated_at"] = (
-            generated_at
-        )
-
-        usgs_cache["error"] = None
-
-
-        return {
-            "source": "USGS",
-            "live": True,
-            "cache": False,
-            "generated_at": generated_at,
-            "events": events,
-            "error": None
-        }
-
-
-    except (
-        URLError,
-        HTTPError,
-        TimeoutError,
-        json.JSONDecodeError,
-        OSError
-    ) as exc:
-
-        error_message = str(
-            exc
-        )
-
-        usgs_cache["error"] = (
-            error_message
-        )
-
-
-        # Use last successful result
-        # if USGS temporarily becomes unavailable.
-
-        if usgs_cache["events"]:
-
-            return {
-                "source": "USGS",
-                "live": False,
-                "cache": True,
-                "generated_at":
-                    usgs_cache[
-                        "generated_at"
-                    ],
-                "events":
-                    usgs_cache["events"],
-                "error":
-                    error_message
-            }
-
-
-        return {
-            "source": "USGS",
-            "live": False,
-            "cache": False,
-            "generated_at": None,
-            "events": [],
-            "error": error_message
-        }
 
 
 # =========================================================
@@ -396,28 +221,20 @@ def load_locations():
         SELECT
 
             id,
-
             name,
-
             description,
-
             infra_type,
-
             status,
-
             risk_score,
-
             severity,
 
             ST_Y(
                 location::geometry
-            )
-            AS latitude,
+            ) AS latitude,
 
             ST_X(
                 location::geometry
-            )
-            AS longitude
+            ) AS longitude
 
         FROM infrastructure_points
 
@@ -435,47 +252,1073 @@ def load_locations():
 
 
     return [
-        dict(row._mapping)
+
+        dict(
+            row._mapping
+        )
+
         for row in rows
     ]
 
 
 # =========================================================
-# POSTGIS EVENT → ASSET CORRELATION
+# LOCAL SENSOR INITIALISATION
+# =========================================================
+
+def initialise_sensor_telemetry():
+
+    locations = load_locations()
+
+
+    for asset in locations:
+
+        asset_id = asset["id"]
+
+
+        if asset_id in sensor_telemetry:
+            continue
+
+
+        sensor_telemetry[
+            asset_id
+        ] = {
+
+            "asset_id":
+                asset_id,
+
+            "name":
+                asset["name"],
+
+            "infra_type":
+                asset["infra_type"],
+
+            "source":
+                "LOCAL_PROJECT",
+
+            "external":
+                False,
+
+            "status":
+                "online",
+
+            "health":
+                random.randint(
+                    92,
+                    100
+                ),
+
+            "cpu_percent":
+                round(
+                    random.uniform(
+                        15,
+                        45
+                    ),
+                    1
+                ),
+
+            "temperature_c":
+                round(
+                    random.uniform(
+                        25,
+                        45
+                    ),
+                    1
+                ),
+
+            "latency_ms":
+                round(
+                    random.uniform(
+                        5,
+                        35
+                    ),
+                    1
+                ),
+
+            "packet_loss_percent":
+                round(
+                    random.uniform(
+                        0,
+                        0.5
+                    ),
+                    2
+                ),
+
+            "signal_strength":
+                random.randint(
+                    80,
+                    100
+                ),
+
+            "last_updated":
+                utc_now_iso()
+        }
+
+
+# =========================================================
+# LOCAL SENSOR SIMULATION
+# =========================================================
+
+def update_sensor_telemetry():
+
+    initialise_sensor_telemetry()
+
+
+    for sensor in sensor_telemetry.values():
+
+        sensor[
+            "cpu_percent"
+        ] += random.uniform(
+            -4,
+            4
+        )
+
+
+        sensor[
+            "cpu_percent"
+        ] = round(
+
+            max(
+                1,
+                min(
+                    100,
+                    sensor[
+                        "cpu_percent"
+                    ]
+                )
+            ),
+
+            1
+        )
+
+
+        sensor[
+            "temperature_c"
+        ] += random.uniform(
+            -1.2,
+            1.2
+        )
+
+
+        sensor[
+            "temperature_c"
+        ] = round(
+
+            max(
+                15,
+                min(
+                    90,
+                    sensor[
+                        "temperature_c"
+                    ]
+                )
+            ),
+
+            1
+        )
+
+
+        sensor[
+            "latency_ms"
+        ] += random.uniform(
+            -4,
+            4
+        )
+
+
+        sensor[
+            "latency_ms"
+        ] = round(
+
+            max(
+                1,
+                min(
+                    500,
+                    sensor[
+                        "latency_ms"
+                    ]
+                )
+            ),
+
+            1
+        )
+
+
+        sensor[
+            "packet_loss_percent"
+        ] += random.uniform(
+            -0.10,
+            0.10
+        )
+
+
+        sensor[
+            "packet_loss_percent"
+        ] = round(
+
+            max(
+                0,
+                min(
+                    20,
+                    sensor[
+                        "packet_loss_percent"
+                    ]
+                )
+            ),
+
+            2
+        )
+
+
+        sensor[
+            "signal_strength"
+        ] += random.randint(
+            -2,
+            2
+        )
+
+
+        sensor[
+            "signal_strength"
+        ] = max(
+
+            0,
+
+            min(
+                100,
+                sensor[
+                    "signal_strength"
+                ]
+            )
+        )
+
+
+        health = 100
+
+
+        health -= int(
+            sensor[
+                "cpu_percent"
+            ]
+            * 0.10
+        )
+
+
+        health -= int(
+            sensor[
+                "latency_ms"
+            ]
+            / 20
+        )
+
+
+        health -= int(
+            sensor[
+                "packet_loss_percent"
+            ]
+            * 5
+        )
+
+
+        health = max(
+            0,
+            min(
+                100,
+                health
+            )
+        )
+
+
+        sensor[
+            "health"
+        ] = health
+
+
+        if health >= 80:
+
+            sensor[
+                "status"
+            ] = "online"
+
+        elif health >= 50:
+
+            sensor[
+                "status"
+            ] = "degraded"
+
+        else:
+
+            sensor[
+                "status"
+            ] = "offline"
+
+
+        sensor[
+            "last_updated"
+        ] = utc_now_iso()
+
+
+# =========================================================
+# SENSOR BACKGROUND LOOP
+# =========================================================
+
+async def sensor_update_loop():
+
+    initialise_sensor_telemetry()
+
+
+    while True:
+
+        try:
+
+            update_sensor_telemetry()
+
+        except Exception as exc:
+
+            print(
+                "Local sensor update error:",
+                exc
+            )
+
+
+        await asyncio.sleep(
+            SENSOR_UPDATE_SECONDS
+        )
+
+
+# =========================================================
+# GET LOCAL SENSOR DATA
+# =========================================================
+
+def get_sensor_snapshot():
+
+    initialise_sensor_telemetry()
+
+
+    return sorted(
+
+        sensor_telemetry.values(),
+
+        key=lambda item:
+            item[
+                "asset_id"
+            ]
+    )
+
+
+# =========================================================
+# USGS READ-ONLY FEED
+# =========================================================
+
+def fetch_usgs_earthquakes(
+    force=False
+):
+
+    now = time.time()
+
+
+    cache_age = (
+
+        now
+        -
+        usgs_cache[
+            "fetched_at"
+        ]
+
+        if usgs_cache[
+            "fetched_at"
+        ]
+
+        else None
+    )
+
+
+    if (
+
+        not force
+
+        and usgs_cache[
+            "events"
+        ]
+
+        and cache_age
+        is not None
+
+        and cache_age
+        <
+        USGS_CACHE_SECONDS
+
+    ):
+
+        return {
+
+            "source":
+                "USGS",
+
+            "live":
+                True,
+
+            "cache":
+                True,
+
+            "read_only":
+                True,
+
+            "generated_at":
+                usgs_cache[
+                    "generated_at"
+                ],
+
+            "events":
+                usgs_cache[
+                    "events"
+                ],
+
+            "error":
+                None
+        }
+
+
+    request = Request(
+
+        USGS_FEED_URL,
+
+        headers={
+
+            "User-Agent":
+                "GeoInfrastructureMonitoring/6.2"
+        }
+    )
+
+
+    try:
+
+        with urlopen(
+            request,
+            timeout=15
+        ) as response:
+
+            payload = json.loads(
+
+                response
+                .read()
+                .decode(
+                    "utf-8"
+                )
+            )
+
+
+        events = []
+
+
+        for feature in payload.get(
+            "features",
+            []
+        ):
+
+            properties = (
+                feature.get(
+                    "properties"
+                )
+                or {}
+            )
+
+
+            geometry = (
+                feature.get(
+                    "geometry"
+                )
+                or {}
+            )
+
+
+            coordinates = (
+                geometry.get(
+                    "coordinates"
+                )
+                or []
+            )
+
+
+            if len(
+                coordinates
+            ) < 2:
+
+                continue
+
+
+            magnitude = (
+                properties.get(
+                    "mag"
+                )
+            )
+
+
+            if magnitude is None:
+
+                continue
+
+
+            magnitude = float(
+                magnitude
+            )
+
+
+            longitude = float(
+                coordinates[0]
+            )
+
+
+            latitude = float(
+                coordinates[1]
+            )
+
+
+            depth = (
+
+                float(
+                    coordinates[2]
+                )
+
+                if len(
+                    coordinates
+                )
+                >= 3
+
+                else None
+            )
+
+
+            events.append({
+
+                "id":
+                    feature.get(
+                        "id"
+                    ),
+
+                "event_type":
+                    "earthquake",
+
+                "title":
+                    properties.get(
+                        "title"
+                    )
+                    or
+                    "Earthquake",
+
+                "place":
+                    properties.get(
+                        "place"
+                    )
+                    or
+                    "Unknown",
+
+                "magnitude":
+                    magnitude,
+
+                "depth_km":
+                    depth,
+
+                "latitude":
+                    latitude,
+
+                "longitude":
+                    longitude,
+
+                "timestamp":
+                    milliseconds_to_iso(
+                        properties.get(
+                            "time"
+                        )
+                    ),
+
+                "updated_at":
+                    milliseconds_to_iso(
+                        properties.get(
+                            "updated"
+                        )
+                    ),
+
+                "severity":
+                    magnitude_severity(
+                        magnitude
+                    ),
+
+                "radius_km":
+                    estimated_impact_radius(
+                        magnitude
+                    ),
+
+                "source":
+                    "USGS",
+
+                "live":
+                    True,
+
+                "read_only":
+                    True,
+
+                "simulated":
+                    False
+            })
+
+
+        generated_at = utc_now_iso()
+
+
+        metadata = payload.get(
+            "metadata",
+            {}
+        )
+
+
+        if metadata.get(
+            "generated"
+        ):
+
+            generated_at = (
+                milliseconds_to_iso(
+                    metadata[
+                        "generated"
+                    ]
+                )
+            )
+
+
+        usgs_cache[
+            "events"
+        ] = events
+
+
+        usgs_cache[
+            "fetched_at"
+        ] = now
+
+
+        usgs_cache[
+            "generated_at"
+        ] = generated_at
+
+
+        usgs_cache[
+            "error"
+        ] = None
+
+
+        return {
+
+            "source":
+                "USGS",
+
+            "live":
+                True,
+
+            "cache":
+                False,
+
+            "read_only":
+                True,
+
+            "generated_at":
+                generated_at,
+
+            "events":
+                events,
+
+            "error":
+                None
+        }
+
+
+    except (
+        URLError,
+        HTTPError,
+        TimeoutError,
+        json.JSONDecodeError,
+        OSError
+    ) as exc:
+
+        usgs_cache[
+            "error"
+        ] = str(
+            exc
+        )
+
+
+        return {
+
+            "source":
+                "USGS",
+
+            "live":
+                False,
+
+            "cache":
+                True,
+
+            "read_only":
+                True,
+
+            "generated_at":
+                usgs_cache[
+                    "generated_at"
+                ],
+
+            "events":
+                usgs_cache[
+                    "events"
+                ],
+
+            "error":
+                str(
+                    exc
+                )
+        }
+
+
+# =========================================================
+# TEST EVENT CREATION
+# =========================================================
+
+def load_asset_by_id(
+    asset_id
+):
+
+    locations = load_locations()
+
+
+    for asset in locations:
+
+        if (
+            asset[
+                "id"
+            ]
+            ==
+            asset_id
+        ):
+
+            return asset
+
+
+    return None
+
+
+def create_test_event_object(
+    request_data
+):
+
+    asset = load_asset_by_id(
+        request_data.asset_id
+    )
+
+
+    if asset is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Infrastructure asset not found"
+        )
+
+
+    radius = (
+
+        request_data.radius_km
+
+        if request_data.radius_km
+        is not None
+
+        else estimated_impact_radius(
+            request_data.magnitude
+        )
+    )
+
+
+    return {
+
+        "id":
+            "TEST-"
+            +
+            uuid.uuid4()
+            .hex[
+                :8
+            ]
+            .upper(),
+
+        "event_type":
+            "earthquake",
+
+        "title":
+            (
+                "SIMULATED TEST "
+                f"M{request_data.magnitude:.1f} "
+                "Earthquake"
+            ),
+
+        "place":
+            (
+                "Internal test near "
+                +
+                asset[
+                    "name"
+                ]
+            ),
+
+        "magnitude":
+            float(
+                request_data.magnitude
+            ),
+
+        "depth_km":
+            10,
+
+        "latitude":
+            float(
+                asset[
+                    "latitude"
+                ]
+            )
+            +
+            request_data.latitude_offset,
+
+        "longitude":
+            float(
+                asset[
+                    "longitude"
+                ]
+            )
+            +
+            request_data.longitude_offset,
+
+        "timestamp":
+            utc_now_iso(),
+
+        "updated_at":
+            utc_now_iso(),
+
+        "severity":
+            magnitude_severity(
+                request_data.magnitude
+            ),
+
+        "radius_km":
+            float(
+                radius
+            ),
+
+        "source":
+            "TEST",
+
+        "live":
+            False,
+
+        "simulated":
+            True,
+
+        "external":
+            False,
+
+        "project_only":
+            True,
+
+        "target_asset_id":
+            asset[
+                "id"
+            ],
+
+        "target_asset_name":
+            asset[
+                "name"
+            ]
+    }
+
+
+# =========================================================
+# ACTIVE EVENTS
+# =========================================================
+
+def build_active_event_feed():
+
+    usgs_feed = (
+        fetch_usgs_earthquakes()
+    )
+
+
+    events = list(
+        usgs_feed[
+            "events"
+        ]
+    )
+
+
+    test_event = (
+        test_event_state[
+            "event"
+        ]
+    )
+
+
+    if test_event:
+
+        events.append(
+            test_event
+        )
+
+
+    return {
+
+        "source":
+            (
+                "USGS+LOCAL_TEST"
+
+                if test_event
+
+                else "USGS"
+            ),
+
+        "live":
+            usgs_feed[
+                "live"
+            ],
+
+        "usgs_read_only":
+            True,
+
+        "local_sensor_mode":
+            SENSOR_MODE,
+
+        "generated_at":
+            usgs_feed[
+                "generated_at"
+            ],
+
+        "usgs_event_count":
+            len(
+                usgs_feed[
+                    "events"
+                ]
+            ),
+
+        "test_event_count":
+            (
+                1
+                if test_event
+                else 0
+            ),
+
+        "event_count":
+            len(
+                events
+            ),
+
+        "events":
+            events
+    }
+
+
+# =========================================================
+# EXPOSURE CALCULATION
+# =========================================================
+
+def calculate_exposure_score(
+    magnitude,
+    distance_km,
+    radius_km
+):
+
+    magnitude_component = min(
+
+        70,
+
+        max(
+            10,
+
+            20
+            +
+            (
+                magnitude
+                - 2.5
+            )
+            * 18
+        )
+    )
+
+
+    proximity = max(
+
+        0,
+
+        1
+        -
+        (
+            distance_km
+            /
+            radius_km
+        )
+    )
+
+
+    score = round(
+
+        magnitude_component
+
+        +
+
+        proximity
+        * 30
+    )
+
+
+    return int(
+
+        max(
+            0,
+            min(
+                100,
+                score
+            )
+        )
+    )
+
+
+def score_to_severity(
+    score
+):
+
+    if score >= 75:
+        return "critical"
+
+    if score >= 55:
+        return "high"
+
+    if score >= 30:
+        return "medium"
+
+    return "low"
+
+
+# =========================================================
+# POSTGIS CORRELATION
 # =========================================================
 
 def infrastructure_in_event_radius(
     event
 ):
 
-    radius_meters = (
-        event["radius_km"]
-        * 1000
-    )
-
-
     query = text("""
         SELECT
 
             id,
-
             name,
-
             description,
-
             infra_type,
-
             status,
 
             ST_Y(
                 location::geometry
-            )
-            AS latitude,
+            ) AS latitude,
 
             ST_X(
                 location::geometry
-            )
-            AS longitude,
+            ) AS longitude,
 
             ST_Distance(
 
@@ -489,8 +1332,7 @@ def infrastructure_in_event_radius(
                     4326
                 )::geography
 
-            )
-            AS distance_meters
+            ) AS distance_meters
 
         FROM infrastructure_points
 
@@ -509,21 +1351,22 @@ def infrastructure_in_event_radius(
                 )::geography,
 
                 :radius_meters
-
             )
 
-        ORDER BY
-            distance_meters ASC;
+        ORDER BY distance_meters;
     """)
 
 
     with engine.connect() as conn:
 
         rows = (
-            conn
-            .execute(
+
+            conn.execute(
+
                 query,
+
                 {
+
                     "longitude":
                         event[
                             "longitude"
@@ -535,8 +1378,12 @@ def infrastructure_in_event_radius(
                         ],
 
                     "radius_meters":
-                        radius_meters
+                        event[
+                            "radius_km"
+                        ]
+                        * 1000
                 }
+
             )
             .fetchall()
         )
@@ -558,21 +1405,22 @@ def infrastructure_in_event_radius(
                     "distance_meters"
                 ]
             )
-            / 1000
+            /
+            1000
         )
 
 
         score = calculate_exposure_score(
-            event["magnitude"],
+
+            event[
+                "magnitude"
+            ],
+
             distance_km,
-            event["radius_km"]
-        )
 
-
-        severity = (
-            score_to_severity(
-                score
-            )
+            event[
+                "radius_km"
+            ]
         )
 
 
@@ -600,7 +1448,9 @@ def infrastructure_in_event_radius(
 
         asset[
             "estimated_severity"
-        ] = severity
+        ] = score_to_severity(
+            score
+        )
 
 
         assets.append(
@@ -612,82 +1462,7 @@ def infrastructure_in_event_radius(
 
 
 # =========================================================
-# ESTIMATED EXPOSURE SCORE
-# =========================================================
-
-def calculate_exposure_score(
-    magnitude,
-    distance_km,
-    radius_km
-):
-
-    if radius_km <= 0:
-        return 0
-
-
-    magnitude_component = min(
-        70,
-        max(
-            10,
-            20
-            + (
-                magnitude - 2.5
-            )
-            * 18
-        )
-    )
-
-
-    proximity_ratio = max(
-        0,
-        1
-        - (
-            distance_km
-            / radius_km
-        )
-    )
-
-
-    proximity_component = (
-        proximity_ratio
-        * 30
-    )
-
-
-    score = int(
-        round(
-            magnitude_component
-            +
-            proximity_component
-        )
-    )
-
-
-    return max(
-        0,
-        min(
-            score,
-            100
-        )
-    )
-
-
-def score_to_severity(score):
-
-    if score >= 75:
-        return "critical"
-
-    if score >= 55:
-        return "high"
-
-    if score >= 30:
-        return "medium"
-
-    return "low"
-
-
-# =========================================================
-# COMPLETE IMPACT ANALYSIS
+# IMPACT ANALYSIS
 # =========================================================
 
 def build_impact_analysis(
@@ -706,63 +1481,71 @@ def build_impact_analysis(
         )
 
 
-        event_result = {
+        results.append({
+
             **event,
 
             "affected_count":
-                len(assets),
+                len(
+                    assets
+                ),
 
             "affected_assets":
                 assets
-        }
-
-
-        results.append(
-            event_result
-        )
+        })
 
 
     return results
 
 
 # =========================================================
-# AGGREGATE RISK BY ASSET
+# RISK SNAPSHOT
 # =========================================================
 
 def build_asset_risk_snapshot(
-    impact_analysis
+    impacts
 ):
 
-    asset_risk = {}
+    risks = {}
 
 
-    for event in impact_analysis:
+    for event in impacts:
 
         for asset in event[
             "affected_assets"
         ]:
 
-            asset_id = asset["id"]
-
-
             risk = {
+
                 "id":
-                    asset_id,
+                    asset[
+                        "id"
+                    ],
 
                 "name":
-                    asset["name"],
+                    asset[
+                        "name"
+                    ],
 
                 "infra_type":
-                    asset["infra_type"],
+                    asset[
+                        "infra_type"
+                    ],
 
                 "status":
-                    asset["status"],
+                    asset[
+                        "status"
+                    ],
 
                 "latitude":
-                    asset["latitude"],
+                    asset[
+                        "latitude"
+                    ],
 
                 "longitude":
-                    asset["longitude"],
+                    asset[
+                        "longitude"
+                    ],
 
                 "risk_score":
                     asset[
@@ -774,11 +1557,21 @@ def build_asset_risk_snapshot(
                         "estimated_severity"
                     ],
 
-                "hazard":
-                    event["title"],
-
                 "event_id":
-                    event["id"],
+                    event[
+                        "id"
+                    ],
+
+                "event_source":
+                    event[
+                        "source"
+                    ],
+
+                "simulated":
+                    event.get(
+                        "simulated",
+                        False
+                    ),
 
                 "magnitude":
                     event[
@@ -792,54 +1585,61 @@ def build_asset_risk_snapshot(
             }
 
 
-            existing = (
-                asset_risk.get(
-                    asset_id
-                )
+            current = risks.get(
+                asset[
+                    "id"
+                ]
             )
 
 
             if (
-                existing is None
-                or
-                risk[
+
+                current is None
+
+                or risk[
                     "risk_score"
                 ]
                 >
-                existing[
+                current[
                     "risk_score"
                 ]
+
             ):
 
-                asset_risk[
-                    asset_id
+                risks[
+                    asset[
+                        "id"
+                    ]
                 ] = risk
 
 
     return sorted(
-        asset_risk.values(),
+
+        risks.values(),
+
         key=lambda item:
-            item["risk_score"],
+            item[
+                "risk_score"
+            ],
+
         reverse=True
     )
 
 
 # =========================================================
-# STORE ESTIMATED RISK
+# DATABASE RISK UPDATE
 # =========================================================
 
 def persist_risk_snapshot(
-    risk_snapshot
+    risks
 ):
 
     with engine.begin() as conn:
 
-        # Reset estimated exposure values
-
         conn.execute(
             text("""
-                UPDATE
-                    infrastructure_points
+                UPDATE infrastructure_points
+
                 SET
                     risk_score = 0,
                     severity = 'low';
@@ -847,29 +1647,27 @@ def persist_risk_snapshot(
         )
 
 
-        update_query = text("""
-            UPDATE
-                infrastructure_points
-
-            SET
-                risk_score =
-                    :risk_score,
-
-                severity =
-                    :severity
-
-            WHERE
-                id = :id;
-        """)
-
-
-        for asset in risk_snapshot:
+        for asset in risks:
 
             conn.execute(
-                update_query,
+
+                text("""
+                    UPDATE infrastructure_points
+
+                    SET
+                        risk_score = :risk_score,
+                        severity = :severity
+
+                    WHERE
+                        id = :id;
+                """),
+
                 {
+
                     "id":
-                        asset["id"],
+                        asset[
+                            "id"
+                        ],
 
                     "risk_score":
                         asset[
@@ -891,16 +1689,15 @@ def persist_risk_snapshot(
 def build_live_snapshot():
 
     feed = (
-        fetch_usgs_earthquakes()
+        build_active_event_feed()
     )
-
-
-    events = feed["events"]
 
 
     impacts = (
         build_impact_analysis(
-            events
+            feed[
+                "events"
+            ]
         )
     )
 
@@ -913,6 +1710,7 @@ def build_live_snapshot():
 
 
     return {
+
         "feed":
             feed,
 
@@ -925,10 +1723,10 @@ def build_live_snapshot():
 
 
 # =========================================================
-# BACKGROUND LIVE UPDATE
+# RISK BACKGROUND LOOP
 # =========================================================
 
-async def live_update_loop():
+async def risk_update_loop():
 
     while True:
 
@@ -942,14 +1740,19 @@ async def live_update_loop():
 
 
             await asyncio.to_thread(
+
                 persist_risk_snapshot,
-                snapshot["risk"]
+
+                snapshot[
+                    "risk"
+                ]
             )
+
 
         except Exception as exc:
 
             print(
-                "Live update error:",
+                "Risk update error:",
                 exc
             )
 
@@ -964,60 +1767,81 @@ async def live_update_loop():
 # =========================================================
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(
+    app: FastAPI
+):
 
-    task = asyncio.create_task(
-        live_update_loop()
+    sensor_task = asyncio.create_task(
+        sensor_update_loop()
+    )
+
+
+    risk_task = asyncio.create_task(
+        risk_update_loop()
     )
 
 
     yield
 
 
-    task.cancel()
+    sensor_task.cancel()
+
+    risk_task.cancel()
 
 
-    try:
+    for task in [
+        sensor_task,
+        risk_task
+    ]:
 
-        await task
+        try:
 
-    except asyncio.CancelledError:
-        pass
+            await task
 
+        except asyncio.CancelledError:
+
+            pass
+
+
+# =========================================================
+# FASTAPI
+# =========================================================
 
 app = FastAPI(
+
     title=(
-        "Infrastructure Situational "
-        "Awareness Platform"
+        "Infrastructure Situational Awareness Platform"
     ),
+
+    version="6.2.0",
 
     description=(
-        "Live geospatial infrastructure "
-        "monitoring using FastAPI, "
-        "PostgreSQL/PostGIS, USGS and "
-        "WebSockets."
+        "Live infrastructure monitoring with "
+        "project-local sensor telemetry, PostGIS, "
+        "USGS read-only earthquake data and WebSockets."
     ),
-
-    version="6.0.0",
 
     lifespan=lifespan
 )
 
 
-# =========================================================
-# CORS
-# =========================================================
-
 app.add_middleware(
+
     CORSMiddleware,
 
-    allow_origins=["*"],
+    allow_origins=[
+        "*"
+    ],
 
     allow_credentials=True,
 
-    allow_methods=["*"],
+    allow_methods=[
+        "*"
+    ],
 
-    allow_headers=["*"],
+    allow_headers=[
+        "*"
+    ]
 )
 
 
@@ -1029,21 +1853,24 @@ app.add_middleware(
 def root():
 
     return {
-        "project":
-            "Infrastructure Situational "
-            "Awareness Platform",
 
-        "phase":
-            6,
+        "project":
+            "Infrastructure Situational Awareness Platform",
 
         "version":
-            "6.0.0",
+            "6.2.0",
+
+        "sensor_mode":
+            SENSOR_MODE,
+
+        "sensor_data_external":
+            False,
+
+        "usgs_mode":
+            "READ_ONLY",
 
         "status":
-            "running",
-
-        "live_source":
-            "USGS Earthquake Hazards Program"
+            "running"
     }
 
 
@@ -1054,9 +1881,7 @@ def root():
 @app.get("/health")
 def health():
 
-    database_status = (
-        "connected"
-    )
+    database = "connected"
 
 
     try:
@@ -1064,55 +1889,44 @@ def health():
         with engine.connect() as conn:
 
             conn.execute(
-                text("SELECT 1")
+                text(
+                    "SELECT 1"
+                )
             )
+
 
     except Exception:
 
-        database_status = (
-            "disconnected"
-        )
-
-
-    cache_age = None
-
-
-    if usgs_cache[
-        "fetched_at"
-    ]:
-
-        cache_age = round(
-            time.time()
-            -
-            usgs_cache[
-                "fetched_at"
-            ],
-            1
-        )
+        database = "disconnected"
 
 
     return {
+
         "status":
             (
                 "healthy"
-                if database_status
-                == "connected"
+                if database
+                ==
+                "connected"
                 else "degraded"
             ),
 
         "database":
-            database_status,
+            database,
 
-        "usgs_source":
-            "configured",
+        "sensor_mode":
+            SENSOR_MODE,
 
-        "usgs_cache_age_seconds":
-            cache_age,
+        "sensor_external_push":
+            False,
 
-        "last_usgs_error":
-            usgs_cache[
-                "error"
-            ]
+        "usgs":
+            "read-only",
+
+        "local_sensor_count":
+            len(
+                sensor_telemetry
+            )
     }
 
 
@@ -1127,53 +1941,189 @@ def locations():
 
 
 # =========================================================
-# LIVE EVENTS
+# LOCAL SENSOR TELEMETRY
+# =========================================================
+
+@app.get("/sensor-telemetry")
+def sensor_status():
+
+    return {
+
+        "source":
+            "LOCAL_PROJECT",
+
+        "external":
+            False,
+
+        "update_interval_seconds":
+            SENSOR_UPDATE_SECONDS,
+
+        "count":
+            len(
+                get_sensor_snapshot()
+            ),
+
+        "sensors":
+            get_sensor_snapshot()
+    }
+
+
+# =========================================================
+# SINGLE SENSOR
+# =========================================================
+
+@app.get(
+    "/sensor-telemetry/{asset_id}"
+)
+def sensor_by_id(
+    asset_id: int
+):
+
+    initialise_sensor_telemetry()
+
+
+    sensor = (
+        sensor_telemetry.get(
+            asset_id
+        )
+    )
+
+
+    if sensor is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Sensor not found"
+        )
+
+
+    return sensor
+
+
+# =========================================================
+# EVENTS
 # =========================================================
 
 @app.get("/events")
 def events():
 
     return (
-        fetch_usgs_earthquakes()
+        build_active_event_feed()
     )
 
 
 # =========================================================
-# IMPACT ANALYSIS
+# TEST EVENT
+# =========================================================
+
+@app.get("/test-event")
+def get_test_event():
+
+    return {
+
+        "active":
+            test_event_state[
+                "event"
+            ]
+            is not None,
+
+        "project_only":
+            True,
+
+        "external":
+            False,
+
+        "event":
+            test_event_state[
+                "event"
+            ]
+    }
+
+
+@app.post("/test-event")
+def create_test_event(
+    request_data:
+        TestEventRequest
+):
+
+    event = create_test_event_object(
+        request_data
+    )
+
+
+    test_event_state[
+        "event"
+    ] = event
+
+
+    return {
+
+        "message":
+            "Internal project test event created",
+
+        "external":
+            False,
+
+        "project_only":
+            True,
+
+        "event":
+            event
+    }
+
+
+@app.delete("/test-event")
+def remove_test_event():
+
+    previous = (
+        test_event_state[
+            "event"
+        ]
+    )
+
+
+    test_event_state[
+        "event"
+    ] = None
+
+
+    return {
+
+        "message":
+            "Internal project test event removed",
+
+        "external":
+            False,
+
+        "removed_event":
+            previous
+    }
+
+
+# =========================================================
+# IMPACT
 # =========================================================
 
 @app.get("/impact-analysis")
 def impact_analysis():
 
-    feed = (
-        fetch_usgs_earthquakes()
-    )
-
-
-    impacts = (
-        build_impact_analysis(
-            feed["events"]
-        )
+    snapshot = (
+        build_live_snapshot()
     )
 
 
     return {
-        "source":
-            feed["source"],
 
-        "live":
-            feed["live"],
+        "project":
+            "local",
 
-        "generated_at":
-            feed["generated_at"],
-
-        "event_count":
-            len(
-                feed["events"]
-            ),
+        "external_sensor_data":
+            False,
 
         "events":
-            impacts
+            snapshot[
+                "impacts"
+            ]
     }
 
 
@@ -1190,23 +2140,21 @@ def risk():
 
 
     return {
-        "source":
-            "USGS",
 
-        "live":
-            snapshot[
-                "feed"
-            ][
-                "live"
-            ],
+        "external_sensor_data":
+            False,
 
         "affected_assets":
             len(
-                snapshot["risk"]
+                snapshot[
+                    "risk"
+                ]
             ),
 
         "assets":
-            snapshot["risk"]
+            snapshot[
+                "risk"
+            ]
     }
 
 
@@ -1217,43 +2165,19 @@ def risk():
 @app.get("/analytics")
 def analytics():
 
-    with engine.connect() as conn:
-
-        total = conn.execute(
-            text("""
-                SELECT COUNT(*)
-                FROM infrastructure_points;
-            """)
-        ).scalar()
+    locations_data = (
+        load_locations()
+    )
 
 
-        type_rows = (
-            conn.execute(
-                text("""
-                    SELECT
-                        infra_type,
-                        COUNT(*) AS count
-
-                    FROM
-                        infrastructure_points
-
-                    GROUP BY
-                        infra_type
-
-                    ORDER BY
-                        count DESC;
-                """)
-            )
-            .fetchall()
-        )
+    sensor_data = (
+        get_sensor_snapshot()
+    )
 
 
-    by_type = {
-        row.infra_type:
-            row.count
-
-        for row in type_rows
-    }
+    feed = (
+        build_active_event_feed()
+    )
 
 
     snapshot = (
@@ -1261,25 +2185,39 @@ def analytics():
     )
 
 
-    events = (
-        snapshot[
-            "feed"
-        ][
-            "events"
-        ]
-    )
+    type_counts = {}
 
 
-    risk_assets = (
-        snapshot[
-            "risk"
-        ]
-    )
+    for item in locations_data:
+
+        type_name = (
+            item[
+                "infra_type"
+            ]
+            or "Unknown"
+        )
+
+
+        type_counts[
+            type_name
+        ] = (
+            type_counts.get(
+                type_name,
+                0
+            )
+            + 1
+        )
 
 
     high_risk = sum(
+
         1
-        for asset in risk_assets
+
+        for asset
+        in snapshot[
+            "risk"
+        ]
+
         if asset[
             "severity"
         ]
@@ -1290,53 +2228,121 @@ def analytics():
     )
 
 
-    critical_events = sum(
+    online_sensors = sum(
+
         1
-        for event in events
-        if event[
-            "severity"
+
+        for sensor
+        in sensor_data
+
+        if sensor[
+            "status"
         ]
         ==
-        "critical"
+        "online"
+    )
+
+
+    degraded_sensors = sum(
+
+        1
+
+        for sensor
+        in sensor_data
+
+        if sensor[
+            "status"
+        ]
+        ==
+        "degraded"
+    )
+
+
+    offline_sensors = sum(
+
+        1
+
+        for sensor
+        in sensor_data
+
+        if sensor[
+            "status"
+        ]
+        ==
+        "offline"
     )
 
 
     return {
+
         "total_infrastructure":
-            total,
+            len(
+                locations_data
+            ),
 
         "live_earthquakes":
-            len(events),
+            feed[
+                "usgs_event_count"
+            ],
+
+        "test_events":
+            feed[
+                "test_event_count"
+            ],
 
         "affected_assets":
             len(
-                risk_assets
+                snapshot[
+                    "risk"
+                ]
             ),
 
         "high_risk_assets":
             high_risk,
 
         "critical_events":
-            critical_events,
+            sum(
+
+                1
+
+                for event
+                in feed[
+                    "events"
+                ]
+
+                if event[
+                    "severity"
+                ]
+                ==
+                "critical"
+            ),
+
+        "sensor_source":
+            "LOCAL_PROJECT",
+
+        "sensor_data_external":
+            False,
+
+        "sensor_count":
+            len(
+                sensor_data
+            ),
+
+        "online_sensors":
+            online_sensors,
+
+        "degraded_sensors":
+            degraded_sensors,
+
+        "offline_sensors":
+            offline_sensors,
 
         "by_type":
-            by_type,
-
-        "data_source":
-            "USGS",
+            type_counts,
 
         "live":
-            snapshot[
-                "feed"
-            ][
+            feed[
                 "live"
-            ],
-
-        "generated_at":
-            snapshot[
-                "feed"
-            ][
-                "generated_at"
             ]
     }
 
@@ -1353,83 +2359,49 @@ def search(
     )
 ):
 
-    query = text("""
-        SELECT
-
-            id,
-
-            name,
-
-            description,
-
-            infra_type,
-
-            status,
-
-            risk_score,
-
-            severity,
-
-            ST_Y(
-                location::geometry
-            )
-            AS latitude,
-
-            ST_X(
-                location::geometry
-            )
-            AS longitude
-
-        FROM infrastructure_points
-
-        WHERE
-
-            LOWER(name)
-            LIKE LOWER(:search)
-
-            OR
-
-            LOWER(
-                COALESCE(
-                    description,
-                    ''
-                )
-            )
-            LIKE LOWER(:search)
-
-            OR
-
-            LOWER(
-                COALESCE(
-                    infra_type,
-                    ''
-                )
-            )
-            LIKE LOWER(:search)
-
-        ORDER BY name
-
-        LIMIT 50;
-    """)
-
-
-    with engine.connect() as conn:
-
-        rows = (
-            conn.execute(
-                query,
-                {
-                    "search":
-                        f"%{q}%"
-                }
-            )
-            .fetchall()
-        )
+    search_text = q.lower()
 
 
     return [
-        dict(row._mapping)
-        for row in rows
+
+        item
+
+        for item
+        in load_locations()
+
+        if (
+
+            search_text
+            in (
+                item[
+                    "name"
+                ]
+                or ""
+            )
+            .lower()
+
+            or
+
+            search_text
+            in (
+                item[
+                    "description"
+                ]
+                or ""
+            )
+            .lower()
+
+            or
+
+            search_text
+            in (
+                item[
+                    "infra_type"
+                ]
+                or ""
+            )
+            .lower()
+        )
     ]
 
 
@@ -1447,28 +2419,20 @@ def nearest(
         SELECT
 
             id,
-
             name,
-
             description,
-
             infra_type,
-
             status,
-
             risk_score,
-
             severity,
 
             ST_Y(
                 location::geometry
-            )
-            AS latitude,
+            ) AS latitude,
 
             ST_X(
                 location::geometry
-            )
-            AS longitude,
+            ) AS longitude,
 
             ST_Distance(
 
@@ -1482,8 +2446,7 @@ def nearest(
                     4326
                 )::geography
 
-            )
-            AS distance_meters
+            ) AS distance_meters
 
         FROM infrastructure_points
 
@@ -1508,11 +2471,17 @@ def nearest(
     with engine.connect() as conn:
 
         row = (
+
             conn.execute(
+
                 query,
+
                 {
-                    "lat": lat,
-                    "lon": lon
+                    "lat":
+                        lat,
+
+                    "lon":
+                        lon
                 }
             )
             .fetchone()
@@ -1521,10 +2490,10 @@ def nearest(
 
     if row is None:
 
-        return {
-            "message":
-                "No infrastructure found"
-        }
+        raise HTTPException(
+            status_code=404,
+            detail="No infrastructure found"
+        )
 
 
     data = dict(
@@ -1538,17 +2507,19 @@ def nearest(
         data[
             "distance_meters"
         ]
-        or 0
     )
 
 
     data[
         "distance_km"
     ] = round(
+
         data[
             "distance_meters"
         ]
-        / 1000,
+        /
+        1000,
+
         2
     )
 
@@ -1557,14 +2528,15 @@ def nearest(
 
 
 # =========================================================
-# WEBSOCKET - LOCATIONS
+# SENSOR WEBSOCKET
 # =========================================================
 
 @app.websocket(
-    "/ws/locations"
+    "/ws/sensors"
 )
-async def locations_socket(
-    websocket: WebSocket
+async def sensor_socket(
+    websocket:
+        WebSocket
 ):
 
     await websocket.accept()
@@ -1574,15 +2546,65 @@ async def locations_socket(
 
         while True:
 
-            await websocket.send_json(
-                {
-                    "type":
-                        "locations",
+            await websocket.send_json({
 
-                    "data":
-                        load_locations()
-                }
+                "type":
+                    "sensor_telemetry",
+
+                "source":
+                    "LOCAL_PROJECT",
+
+                "external":
+                    False,
+
+                "data":
+                    get_sensor_snapshot()
+            })
+
+
+            await asyncio.sleep(
+                SENSOR_UPDATE_SECONDS
             )
+
+
+    except Exception:
+
+        pass
+
+
+# =========================================================
+# LOCATION WEBSOCKET
+# =========================================================
+
+@app.websocket(
+    "/ws/locations"
+)
+async def locations_socket(
+    websocket:
+        WebSocket
+):
+
+    await websocket.accept()
+
+
+    try:
+
+        while True:
+
+            await websocket.send_json({
+
+                "type":
+                    "locations",
+
+                "source":
+                    "LOCAL_PROJECT",
+
+                "external":
+                    False,
+
+                "data":
+                    load_locations()
+            })
 
 
             await asyncio.sleep(
@@ -1591,18 +2613,20 @@ async def locations_socket(
 
 
     except Exception:
+
         pass
 
 
 # =========================================================
-# WEBSOCKET - LIVE EARTHQUAKES
+# EVENT WEBSOCKET
 # =========================================================
 
 @app.websocket(
     "/ws/events"
 )
 async def events_socket(
-    websocket: WebSocket
+    websocket:
+        WebSocket
 ):
 
     await websocket.accept()
@@ -1612,41 +2636,35 @@ async def events_socket(
 
         while True:
 
-            feed = (
+            snapshot = (
+
                 await asyncio.to_thread(
-                    fetch_usgs_earthquakes
+                    build_live_snapshot
                 )
             )
 
 
-            impacts = (
-                await asyncio.to_thread(
-                    build_impact_analysis,
-                    feed["events"]
-                )
-            )
+            await websocket.send_json({
 
+                "type":
+                    "earthquakes",
 
-            await websocket.send_json(
-                {
-                    "type":
-                        "earthquakes",
+                "usgs_read_only":
+                    True,
 
-                    "source":
-                        "USGS",
+                "test_event_external":
+                    False,
 
-                    "live":
-                        feed["live"],
+                "data":
+                    snapshot[
+                        "impacts"
+                    ],
 
-                    "generated_at":
-                        feed[
-                            "generated_at"
-                        ],
-
-                    "data":
-                        impacts
-                }
-            )
+                "risk":
+                    snapshot[
+                        "risk"
+                    ]
+            })
 
 
             await asyncio.sleep(
@@ -1655,4 +2673,5 @@ async def events_socket(
 
 
     except Exception:
+
         pass

@@ -1,3 +1,20 @@
+/* =========================================================
+   INFRASTRUCTURE SITUATIONAL AWARENESS PLATFORM
+
+   Phase 6.2 Frontend
+
+   - Live USGS earthquake visualization
+   - Project-local simulated sensor telemetry
+   - PostGIS exposure/risk visualization
+   - Phase 6.1 local test earthquake
+   - REST + WebSockets
+========================================================= */
+
+
+/* =========================================================
+   GLOBAL STATE
+========================================================= */
+
 let map;
 
 let clusterGroup;
@@ -10,18 +27,52 @@ let earthquakeData = [];
 
 let earthquakeLayers = [];
 
-let locationSocket;
+let activeTestEvent = null;
 
-let eventSocket;
+
+/*
+    Map of asset ID -> local sensor telemetry
+*/
+const sensorTelemetry = new Map();
+
+
+/*
+    Map of asset ID -> Leaflet marker
+*/
+const assetMarkers = new Map();
+
+
+let locationSocket = null;
+
+let eventSocket = null;
+
+let sensorSocket = null;
 
 
 /* =========================================================
-   API
+   API CONFIGURATION
 ========================================================= */
 
 const API_URL =
     `${window.location.protocol}//${window.location.hostname}:8000`;
 
+
+/* =========================================================
+   WEBSOCKET CONFIGURATION
+========================================================= */
+
+function getWebSocketBaseURL() {
+
+    const protocol =
+        window.location.protocol === "https:"
+            ? "wss"
+            : "ws";
+
+
+    return (
+        `${protocol}://${window.location.hostname}:8000`
+    );
+}
 
 
 /* =========================================================
@@ -72,14 +123,14 @@ function getInfrastructureColor(type) {
 
     return (
         colors[
-            (type || "")
-            .toLowerCase()
+            String(
+                type || ""
+            ).toLowerCase()
         ]
         ||
         "#cad4dc"
     );
 }
-
 
 
 /* =========================================================
@@ -89,21 +140,25 @@ function getInfrastructureColor(type) {
 function getRiskColor(severity) {
 
     const value =
-        (severity || "low")
-        .toLowerCase();
+        String(
+            severity || "low"
+        ).toLowerCase();
 
 
     if (value === "critical") {
+
         return "#ff4057";
     }
 
 
     if (value === "high") {
+
         return "#ff843d";
     }
 
 
     if (value === "medium") {
+
         return "#ffc845";
     }
 
@@ -112,9 +167,70 @@ function getRiskColor(severity) {
 }
 
 
+/* =========================================================
+   SENSOR STATUS COLORS
+========================================================= */
+
+function getSensorStatusColor(status) {
+
+    const value =
+        String(
+            status || "unknown"
+        ).toLowerCase();
+
+
+    if (value === "online") {
+
+        return "#5effa5";
+    }
+
+
+    if (value === "degraded") {
+
+        return "#ffc845";
+    }
+
+
+    if (value === "offline") {
+
+        return "#ff4057";
+    }
+
+
+    return "#8398a7";
+}
+
 
 /* =========================================================
-   MAP
+   SENSOR STATUS OPACITY
+========================================================= */
+
+function getSensorOpacity(status) {
+
+    const value =
+        String(
+            status || "online"
+        ).toLowerCase();
+
+
+    if (value === "offline") {
+
+        return 0.35;
+    }
+
+
+    if (value === "degraded") {
+
+        return 0.70;
+    }
+
+
+    return 0.95;
+}
+
+
+/* =========================================================
+   MAP INITIALISATION
 ========================================================= */
 
 function initMap() {
@@ -139,6 +255,11 @@ function initMap() {
         );
 
 
+    /*
+        Keep controls bottom-right so they do not
+        overlap the command panel.
+    */
+
     L.control
         .zoom(
             {
@@ -149,7 +270,11 @@ function initMap() {
         .addTo(map);
 
 
-    /* Free OpenStreetMap tiles */
+    /*
+        OpenStreetMap basemap.
+
+        No CARTO API key is required.
+    */
 
     L.tileLayer(
         "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -169,6 +294,10 @@ function initMap() {
     )
     .addTo(map);
 
+
+    /*
+        Infrastructure marker cluster group
+    */
 
     clusterGroup =
         L.markerClusterGroup(
@@ -193,12 +322,16 @@ function initMap() {
     );
 
 
+    /*
+        Click anywhere on map to find
+        nearest monitored infrastructure.
+    */
+
     map.on(
         "click",
         handleMapClick
     );
 }
-
 
 
 /* =========================================================
@@ -269,7 +402,6 @@ function createClusterIcon(cluster) {
 }
 
 
-
 /* =========================================================
    RISK LOOKUP
 ========================================================= */
@@ -285,9 +417,434 @@ function getAssetRisk(assetId) {
 }
 
 
+/* =========================================================
+   SENSOR LOOKUP
+========================================================= */
+
+function getSensorData(assetId) {
+
+    return (
+        sensorTelemetry.get(
+            Number(assetId)
+        )
+        ||
+        null
+    );
+}
+
 
 /* =========================================================
-   INFRASTRUCTURE MARKER
+   SENSOR AGE
+========================================================= */
+
+function formatTelemetryAge(timestamp) {
+
+    if (!timestamp) {
+
+        return "unknown";
+    }
+
+
+    const date =
+        new Date(
+            timestamp
+        );
+
+
+    if (
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
+
+        return "unknown";
+    }
+
+
+    const seconds =
+        Math.max(
+            0,
+            Math.floor(
+                (
+                    Date.now()
+                    -
+                    date.getTime()
+                )
+                /
+                1000
+            )
+        );
+
+
+    if (seconds < 5) {
+
+        return "just now";
+    }
+
+
+    if (seconds < 60) {
+
+        return `${seconds} sec ago`;
+    }
+
+
+    const minutes =
+        Math.floor(
+            seconds / 60
+        );
+
+
+    if (minutes < 60) {
+
+        return `${minutes} min ago`;
+    }
+
+
+    return timestamp;
+}
+
+
+/* =========================================================
+   SENSOR TELEMETRY POPUP HTML
+========================================================= */
+
+function buildSensorTelemetryHTML(assetId) {
+
+    const sensor =
+        getSensorData(
+            assetId
+        );
+
+
+    if (!sensor) {
+
+        return `
+            <div
+                style="
+                    margin-top:10px;
+                    padding-top:8px;
+                    border-top:
+                    1px solid rgba(255,255,255,0.08);
+                "
+            >
+
+                <strong>
+                    LOCAL LIVE TELEMETRY
+                </strong>
+
+                <br>
+
+                <span
+                    style="
+                        color:#8398a7;
+                    "
+                >
+                    Waiting for local sensor data...
+                </span>
+
+            </div>
+        `;
+    }
+
+
+    const statusColor =
+        getSensorStatusColor(
+            sensor.status
+        );
+
+
+    return `
+        <div
+            style="
+                margin-top:10px;
+                padding-top:9px;
+                border-top:
+                1px solid rgba(255,255,255,0.08);
+            "
+        >
+
+            <strong>
+                LOCAL LIVE TELEMETRY
+            </strong>
+
+            <br><br>
+
+
+            <span
+                style="
+                    color:${statusColor};
+                    font-weight:700;
+                "
+            >
+                ● ${escapeHtml(
+                    String(
+                        sensor.status
+                        || "unknown"
+                    ).toUpperCase()
+                )}
+            </span>
+
+
+            <br><br>
+
+
+            <strong>
+                Health:
+            </strong>
+
+            ${Number(
+                sensor.health
+                ?? 0
+            ).toFixed(0)}%
+
+
+            <br>
+
+
+            <strong>
+                CPU:
+            </strong>
+
+            ${Number(
+                sensor.cpu_percent
+                ?? 0
+            ).toFixed(1)}%
+
+
+            <br>
+
+
+            <strong>
+                Temperature:
+            </strong>
+
+            ${Number(
+                sensor.temperature_c
+                ?? 0
+            ).toFixed(1)}°C
+
+
+            <br>
+
+
+            <strong>
+                Latency:
+            </strong>
+
+            ${Number(
+                sensor.latency_ms
+                ?? 0
+            ).toFixed(1)} ms
+
+
+            <br>
+
+
+            <strong>
+                Packet Loss:
+            </strong>
+
+            ${Number(
+                sensor.packet_loss_percent
+                ?? 0
+            ).toFixed(2)}%
+
+
+            <br>
+
+
+            <strong>
+                Signal:
+            </strong>
+
+            ${Number(
+                sensor.signal_strength
+                ?? 0
+            ).toFixed(0)}%
+
+
+            <br><br>
+
+
+            <span
+                style="
+                    color:#6f8799;
+                    font-size:10px;
+                "
+            >
+
+                Source:
+                LOCAL PROJECT SIMULATION
+
+                <br>
+
+                Updated:
+                ${escapeHtml(
+                    formatTelemetryAge(
+                        sensor.last_updated
+                    )
+                )}
+
+            </span>
+
+        </div>
+    `;
+}
+
+
+/* =========================================================
+   INFRASTRUCTURE POPUP
+========================================================= */
+
+function buildInfrastructurePopup(point) {
+
+    const risk =
+        getAssetRisk(
+            point.id
+        );
+
+
+    let riskHTML = `
+        <strong>
+            Estimated Exposure:
+        </strong>
+
+        Low
+    `;
+
+
+    if (risk) {
+
+        riskHTML = `
+            <strong>
+                Estimated Exposure:
+            </strong>
+
+            ${Number(
+                risk.risk_score
+                ?? 0
+            )}/100
+
+            <br>
+
+
+            <strong>
+                Severity:
+            </strong>
+
+            ${escapeHtml(
+                risk.severity
+                || "low"
+            )}
+
+            <br>
+
+
+            <strong>
+                Hazard:
+            </strong>
+
+            M${Number(
+                risk.magnitude
+                ?? 0
+            )}
+
+            earthquake
+
+            <br>
+
+
+            <strong>
+                Event Source:
+            </strong>
+
+            ${escapeHtml(
+                risk.event_source
+                || "USGS"
+            )}
+
+            <br>
+
+
+            <strong>
+                Hazard Distance:
+            </strong>
+
+            ${Number(
+                risk.distance_km
+                ?? 0
+            ).toFixed(2)}
+            km
+        `;
+    }
+
+
+    return `
+        <div>
+
+            <strong
+                style="
+                    font-size:14px;
+                "
+            >
+                ${escapeHtml(
+                    point.name
+                )}
+            </strong>
+
+
+            <br><br>
+
+
+            ${escapeHtml(
+                point.description
+                || ""
+            )}
+
+
+            <br>
+
+
+            <strong>
+                Infrastructure Type:
+            </strong>
+
+            ${escapeHtml(
+                point.infra_type
+                || "Unknown"
+            )}
+
+
+            <br>
+
+
+            <strong>
+                Asset Status:
+            </strong>
+
+            ${escapeHtml(
+                point.status
+                || "operational"
+            )}
+
+
+            <br><br>
+
+
+            ${riskHTML}
+
+
+            ${buildSensorTelemetryHTML(
+                point.id
+            )}
+
+        </div>
+    `;
+}
+
+
+/* =========================================================
+   CREATE INFRASTRUCTURE MARKER
 ========================================================= */
 
 function createInfrastructureMarker(point) {
@@ -298,13 +855,19 @@ function createInfrastructureMarker(point) {
         );
 
 
+    const sensor =
+        getSensorData(
+            point.id
+        );
+
+
     const severity =
         risk
-        ? risk.severity
-        : (
-            point.severity
-            || "low"
-        );
+            ? risk.severity
+            : (
+                point.severity
+                || "low"
+            );
 
 
     const baseColor =
@@ -317,15 +880,24 @@ function createInfrastructureMarker(point) {
         (
             risk
             &&
-            risk.risk_score
+            Number(
+                risk.risk_score
+                || 0
+            )
             >= 30
         )
-        ?
-        getRiskColor(
-            severity
-        )
-        :
-        baseColor;
+            ?
+            getRiskColor(
+                severity
+            )
+            :
+            baseColor;
+
+
+    const radius =
+        risk
+            ? 9
+            : 7;
 
 
     const marker =
@@ -336,9 +908,7 @@ function createInfrastructureMarker(point) {
             ],
             {
                 radius:
-                    risk
-                    ? 9
-                    : 7,
+                    radius,
 
                 color:
                     markerColor,
@@ -347,106 +917,61 @@ function createInfrastructureMarker(point) {
                     markerColor,
 
                 fillOpacity:
-                    0.95,
+                    getSensorOpacity(
+                        sensor
+                            ? sensor.status
+                            : "online"
+                    ),
 
                 weight:
                     risk
-                    ? 3
-                    : 2
+                        ? 3
+                        : 2
             }
         );
 
 
-    let riskHtml =
-        `
-        <strong>
-            Estimated Risk:
-        </strong>
-
-        Low
-        `;
-
-
-    if (risk) {
-
-        riskHtml =
-            `
-            <strong>
-                Estimated Exposure:
-            </strong>
-
-            ${risk.risk_score}/100
-
-            <br>
-
-            <strong>
-                Severity:
-            </strong>
-
-            ${escapeHtml(
-                risk.severity
-            )}
-
-            <br>
-
-            <strong>
-                Hazard:
-            </strong>
-
-            M${risk.magnitude}
-            earthquake
-
-            <br>
-
-            <strong>
-                Distance:
-            </strong>
-
-            ${risk.distance_km}
-            km
-            `;
-    }
-
-
     marker.bindPopup(
-        `
-        <strong>
-            ${escapeHtml(point.name)}
-        </strong>
+        buildInfrastructurePopup(
+            point
+        )
+    );
 
-        <br><br>
 
-        ${escapeHtml(
-            point.description
-            || ""
-        )}
+    /*
+        Store asset ID on marker
+    */
 
-        <br>
+    marker.assetId =
+        Number(
+            point.id
+        );
 
-        <strong>
-            Type:
-        </strong>
 
-        ${escapeHtml(
-            point.infra_type
-            || "Unknown"
-        )}
+    /*
+        Important:
+        rebuild popup when clicked so the user
+        always sees the latest local telemetry.
+    */
 
-        <br>
+    marker.on(
+        "click",
+        () => {
 
-        <strong>
-            Operational Status:
-        </strong>
+            marker.setPopupContent(
+                buildInfrastructurePopup(
+                    point
+                )
+            );
+        }
+    );
 
-        ${escapeHtml(
-            point.status
-            || "operational"
-        )}
 
-        <br><br>
-
-        ${riskHtml}
-        `
+    assetMarkers.set(
+        Number(
+            point.id
+        ),
+        marker
     );
 
 
@@ -454,50 +979,104 @@ function createInfrastructureMarker(point) {
 }
 
 
-
 /* =========================================================
-   DRAW INFRASTRUCTURE
+   RENDER INFRASTRUCTURE
 ========================================================= */
 
-function renderInfrastructure(
-    data
-) {
+function renderInfrastructure(data) {
 
-    clusterGroup
-        .clearLayers();
+    clusterGroup.clearLayers();
+
+    assetMarkers.clear();
 
 
     data.forEach(
         point => {
 
             if (
-                point.latitude
-                == null
-
+                point.latitude == null
                 ||
-
-                point.longitude
-                == null
+                point.longitude == null
             ) {
 
                 return;
             }
 
 
-            clusterGroup
-                .addLayer(
-                    createInfrastructureMarker(
-                        point
-                    )
-                );
+            clusterGroup.addLayer(
+                createInfrastructureMarker(
+                    point
+                )
+            );
         }
     );
 }
 
 
+/* =========================================================
+   UPDATE EXISTING MARKER TELEMETRY
+========================================================= */
+
+function refreshMarkerTelemetry() {
+
+    infrastructureData.forEach(
+        point => {
+
+            const marker =
+                assetMarkers.get(
+                    Number(
+                        point.id
+                    )
+                );
+
+
+            if (!marker) {
+
+                return;
+            }
+
+
+            const sensor =
+                getSensorData(
+                    point.id
+                );
+
+
+            /*
+                Refresh popup content without rebuilding
+                the whole Leaflet map.
+            */
+
+            marker.setPopupContent(
+                buildInfrastructurePopup(
+                    point
+                )
+            );
+
+
+            /*
+                Visually fade degraded/offline local
+                sensors while keeping infrastructure/risk
+                coloring intact.
+            */
+
+            marker.setStyle(
+                {
+                    fillOpacity:
+                        getSensorOpacity(
+                            sensor
+                                ? sensor.status
+                                : "online"
+                        )
+                }
+            );
+        }
+    );
+}
+
 
 /* =========================================================
-   FILTER TYPES
+   INFRASTRUCTURE TYPE FILTER
 ========================================================= */
 
 function populateTypeFilter(data) {
@@ -508,7 +1087,13 @@ function populateTypeFilter(data) {
         );
 
 
-    const existing =
+    if (!select) {
+
+        return;
+    }
+
+
+    const previous =
         select.value;
 
 
@@ -516,22 +1101,21 @@ function populateTypeFilter(data) {
         [
             ...new Set(
                 data
-                .map(
-                    item =>
-                        item.infra_type
-                )
-                .filter(Boolean)
+                    .map(
+                        item =>
+                            item.infra_type
+                    )
+                    .filter(Boolean)
             )
         ]
         .sort();
 
 
-    select.innerHTML =
-        `
+    select.innerHTML = `
         <option value="all">
             All Infrastructure
         </option>
-        `;
+    `;
 
 
     types.forEach(
@@ -560,65 +1144,156 @@ function populateTypeFilter(data) {
 
     if (
         types.includes(
-            existing
+            previous
         )
     ) {
 
         select.value =
-            existing;
+            previous;
     }
 }
 
 
+/* =========================================================
+   TEST ASSET FILTER
+========================================================= */
+
+function populateTestAssetSelect(data) {
+
+    const select =
+        document.getElementById(
+            "testAsset"
+        );
+
+
+    if (!select) {
+
+        return;
+    }
+
+
+    const previous =
+        select.value;
+
+
+    select.innerHTML = `
+        <option value="">
+            Select infrastructure...
+        </option>
+    `;
+
+
+    [...data]
+        .sort(
+            (a, b) =>
+                String(
+                    a.name
+                )
+                .localeCompare(
+                    String(
+                        b.name
+                    )
+                )
+        )
+        .forEach(
+            point => {
+
+                const option =
+                    document.createElement(
+                        "option"
+                    );
+
+
+                option.value =
+                    point.id;
+
+
+                option.textContent =
+                    `${point.name} (${point.infra_type})`;
+
+
+                select.appendChild(
+                    option
+                );
+            }
+        );
+
+
+    if (
+        previous
+        &&
+        data.some(
+            item =>
+                String(item.id)
+                ===
+                String(previous)
+        )
+    ) {
+
+        select.value =
+            previous;
+    }
+}
+
 
 /* =========================================================
-   SEARCH + FILTER
+   APPLY FILTERS
 ========================================================= */
 
 function applyFilters() {
 
-    const search =
-        document
-        .getElementById(
+    const searchElement =
+        document.getElementById(
             "searchBox"
-        )
-        .value
-        .trim()
-        .toLowerCase();
+        );
+
+
+    const typeElement =
+        document.getElementById(
+            "typeFilter"
+        );
+
+
+    const riskElement =
+        document.getElementById(
+            "riskFilter"
+        );
+
+
+    const search =
+        searchElement
+            ? searchElement.value
+                .trim()
+                .toLowerCase()
+            : "";
 
 
     const selectedType =
-        document
-        .getElementById(
-            "typeFilter"
-        )
-        .value;
+        typeElement
+            ? typeElement.value
+            : "all";
 
 
     const selectedRisk =
-        document
-        .getElementById(
-            "riskFilter"
-        )
-        .value;
+        riskElement
+            ? riskElement.value
+            : "all";
 
 
     const filtered =
-        infrastructureData
-        .filter(
+        infrastructureData.filter(
             point => {
 
-                const text =
-                    `
+                const searchableText = `
                     ${point.name || ""}
                     ${point.description || ""}
                     ${point.infra_type || ""}
-                    `
-                    .toLowerCase();
+                `
+                .toLowerCase();
 
 
                 const matchesSearch =
-                    text.includes(
+                    searchableText.includes(
                         search
                     );
 
@@ -643,11 +1318,11 @@ function applyFilters() {
 
                 const severity =
                     risk
-                    ? risk.severity
-                    : (
-                        point.severity
-                        || "low"
-                    );
+                        ? risk.severity
+                        : (
+                            point.severity
+                            || "low"
+                        );
 
 
                 const matchesRisk =
@@ -679,9 +1354,156 @@ function applyFilters() {
 }
 
 
+/* =========================================================
+   LOAD INFRASTRUCTURE
+========================================================= */
+
+async function loadLocations() {
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_URL}/locations`
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Locations request failed"
+            );
+        }
+
+
+        infrastructureData =
+            await response.json();
+
+
+        populateTypeFilter(
+            infrastructureData
+        );
+
+
+        populateTestAssetSelect(
+            infrastructureData
+        );
+
+
+        applyFilters();
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Locations load error:",
+            error
+        );
+    }
+}
+
 
 /* =========================================================
-   NEAREST INFRASTRUCTURE
+   LOAD LOCAL SENSOR TELEMETRY
+========================================================= */
+
+async function loadSensorTelemetry() {
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_URL}/sensor-telemetry`
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Sensor telemetry request failed"
+            );
+        }
+
+
+        const payload =
+            await response.json();
+
+
+        /*
+            Only accept telemetry explicitly marked as
+            local to this project.
+        */
+
+        if (
+            payload.source
+            !== "LOCAL_PROJECT"
+        ) {
+
+            console.warn(
+                "Unexpected telemetry source:",
+                payload.source
+            );
+
+            return;
+        }
+
+
+        if (
+            payload.external
+            !== false
+        ) {
+
+            console.warn(
+                "Telemetry was not marked project-local."
+            );
+
+            return;
+        }
+
+
+        updateSensorStore(
+            payload.sensors
+            || []
+        );
+
+
+        refreshMarkerTelemetry();
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Sensor telemetry load error:",
+            error
+        );
+    }
+}
+
+
+/* =========================================================
+   UPDATE SENSOR STORE
+========================================================= */
+
+function updateSensorStore(data) {
+
+    data.forEach(
+        sensor => {
+
+            sensorTelemetry.set(
+                Number(
+                    sensor.asset_id
+                ),
+                sensor
+            );
+        }
+    );
+}
+
+
+/* =========================================================
+   MAP CLICK → NEAREST ASSET
 ========================================================= */
 
 async function handleMapClick(event) {
@@ -694,11 +1516,20 @@ async function handleMapClick(event) {
             );
 
 
+        if (!response.ok) {
+
+            throw new Error(
+                "Nearest infrastructure request failed"
+            );
+        }
+
+
         const data =
             await response.json();
 
 
         if (!data.name) {
+
             return;
         }
 
@@ -748,35 +1579,8 @@ async function handleMapClick(event) {
 }
 
 
-
 /* =========================================================
-   LOAD LOCATIONS
-========================================================= */
-
-async function loadLocations() {
-
-    const response =
-        await fetch(
-            `${API_URL}/locations`
-        );
-
-
-    infrastructureData =
-        await response.json();
-
-
-    populateTypeFilter(
-        infrastructureData
-    );
-
-
-    applyFilters();
-}
-
-
-
-/* =========================================================
-   LOAD RISK
+   LOAD RISK DATA
 ========================================================= */
 
 async function loadRisk() {
@@ -789,6 +1593,14 @@ async function loadRisk() {
             );
 
 
+        if (!response.ok) {
+
+            throw new Error(
+                "Risk request failed"
+            );
+        }
+
+
         const data =
             await response.json();
 
@@ -798,13 +1610,18 @@ async function loadRisk() {
             || [];
 
 
-        document
-            .getElementById(
+        const affectedElement =
+            document.getElementById(
                 "affectedAssets"
-            )
-            .textContent =
-            data.affected_assets
-            || 0;
+            );
+
+
+        if (affectedElement) {
+
+            affectedElement.textContent =
+                data.affected_assets
+                || 0;
+        }
 
 
         renderRiskFeed(
@@ -826,7 +1643,6 @@ async function loadRisk() {
 }
 
 
-
 /* =========================================================
    RISK FEED
 ========================================================= */
@@ -839,17 +1655,26 @@ function renderRiskFeed(data) {
         );
 
 
+    if (!container) {
+
+        return;
+    }
+
+
     const significant =
         data
-        .filter(
-            item =>
-                item.risk_score
-                >= 30
-        )
-        .slice(
-            0,
-            8
-        );
+            .filter(
+                item =>
+                    Number(
+                        item.risk_score
+                        || 0
+                    )
+                    >= 30
+            )
+            .slice(
+                0,
+                10
+            );
 
 
     if (
@@ -857,14 +1682,15 @@ function renderRiskFeed(data) {
         === 0
     ) {
 
-        container.innerHTML =
-            `
+        container.innerHTML = `
             <div class="empty-state">
+
                 No monitored infrastructure
                 currently has elevated estimated
                 earthquake exposure.
+
             </div>
-            `;
+        `;
 
         return;
     }
@@ -872,100 +1698,131 @@ function renderRiskFeed(data) {
 
     container.innerHTML =
         significant
-        .map(
-            asset => {
+            .map(
+                asset => {
 
-                return `
-                    <div
-                        class="risk-item"
-                        onclick="
-                            focusAsset(
-                                ${asset.latitude},
-                                ${asset.longitude}
-                            )
-                        "
-                    >
+                    const source =
+                        asset.event_source
+                        || "USGS";
 
-                        <div class="event-header">
 
-                            <strong>
-                                ${escapeHtml(
-                                    asset.name
-                                )}
-                            </strong>
+                    return `
+                        <div
+                            class="risk-item"
 
-                            <span
-                                class="
-                                    severity
+                            onclick="
+                                focusAsset(
+                                    ${asset.latitude},
+                                    ${asset.longitude}
+                                )
+                            "
+                        >
+
+                            <div class="event-header">
+
+                                <strong>
+
+                                    ${escapeHtml(
+                                        asset.name
+                                    )}
+
+                                </strong>
+
+
+                                <span
+                                    class="
+                                        severity
+                                        ${escapeHtml(
+                                            asset.severity
+                                            || "low"
+                                        )}
+                                    "
+                                >
+
                                     ${escapeHtml(
                                         asset.severity
+                                        || "low"
                                     )}
-                                "
-                            >
+
+                                </span>
+
+                            </div>
+
+
+                            <div class="event-type">
+
                                 ${escapeHtml(
-                                    asset.severity
+                                    source
                                 )}
-                            </span>
+
+                                · Exposure
+
+                                ${Number(
+                                    asset.risk_score
+                                    || 0
+                                )}/100
+
+                            </div>
+
+
+                            <div class="event-description">
+
+                                M${Number(
+                                    asset.magnitude
+                                    || 0
+                                )}
+
+                                ·
+
+                                ${Number(
+                                    asset.distance_km
+                                    || 0
+                                ).toFixed(2)}
+                                km away
+
+                            </div>
 
                         </div>
-
-                        <div class="event-type">
-
-                            Exposure:
-                            ${asset.risk_score}/100
-
-                        </div>
-
-                        <div class="event-description">
-
-                            M${asset.magnitude}
-                            earthquake
-
-                            ·
-
-                            ${asset.distance_km}
-                            km away
-
-                        </div>
-
-                    </div>
-                `;
-            }
-        )
-        .join("");
+                    `;
+                }
+            )
+            .join("");
 }
 
 
-
 /* =========================================================
-   LIVE EARTHQUAKES
+   EARTHQUAKE RENDERING
 ========================================================= */
 
 function renderEarthquakes(events) {
 
-    earthquakeLayers
-        .forEach(
-            layer =>
-                map.removeLayer(
-                    layer
-                )
-        );
+    earthquakeLayers.forEach(
+        layer =>
+            map.removeLayer(
+                layer
+            )
+    );
 
 
-    earthquakeLayers =
-        [];
+    earthquakeLayers = [];
 
 
     events.forEach(
         event => {
 
+            const isTest =
+                event.source === "TEST"
+                ||
+                event.simulated === true;
+
+
             const color =
-                getRiskColor(
-                    event.severity
-                );
+                isTest
+                    ? "#bf5cff"
+                    : getRiskColor(
+                        event.severity
+                    );
 
-
-            /* Earthquake centre */
 
             const marker =
                 L.circleMarker(
@@ -975,14 +1832,20 @@ function renderEarthquakes(events) {
                     ],
                     {
                         radius:
-                            Math.max(
-                                5,
-                                Math.min(
-                                    13,
-                                    event.magnitude
-                                    * 1.7
-                                )
-                            ),
+                            isTest
+                                ? 13
+                                :
+                                Math.max(
+                                    5,
+                                    Math.min(
+                                        13,
+                                        Number(
+                                            event.magnitude
+                                            || 0
+                                        )
+                                        * 1.7
+                                    )
+                                ),
 
                         color:
                             "#ffffff",
@@ -994,7 +1857,9 @@ function renderEarthquakes(events) {
                             0.95,
 
                         weight:
-                            1.5
+                            isTest
+                                ? 3
+                                : 1.5
                     }
                 )
                 .addTo(map);
@@ -1004,36 +1869,69 @@ function renderEarthquakes(events) {
                 `
                 <div class="quake-popup">
 
-                    <span class="live-source">
-                        LIVE USGS
+                    <span
+                        class="
+                            ${isTest
+                                ? "test-source"
+                                : "live-source"
+                            }
+                        "
+                    >
+
+                        ${isTest
+                            ? "LOCAL SIMULATED TEST"
+                            : "LIVE USGS READ-ONLY"
+                        }
+
                     </span>
 
+
                     <h3>
-                        M${event.magnitude}
+
+                        M${Number(
+                            event.magnitude
+                            || 0
+                        )}
+
                     </h3>
 
+
                     <strong>
+
                         ${escapeHtml(
                             event.place
+                            || "Unknown location"
                         )}
+
                     </strong>
+
 
                     <br><br>
 
+
                     Depth:
+
                     ${
                         event.depth_km
                         ?? "N/A"
                     }
                     km
 
+
                     <br>
 
-                    Estimated exposure radius:
-                    ${event.radius_km}
+
+                    Estimated Exposure Radius:
+
+                    ${Number(
+                        event.radius_km
+                        || 0
+                    )}
                     km
 
+
                     <br>
+
 
                     ${
                         formatEventAge(
@@ -1051,13 +1949,14 @@ function renderEarthquakes(events) {
             );
 
 
-            /*
-               Only draw exposure circles for stronger
-               earthquakes so the world map stays readable.
-            */
-
             if (
-                event.magnitude >= 4.5
+                isTest
+                ||
+                Number(
+                    event.magnitude
+                    || 0
+                )
+                >= 4.5
             ) {
 
                 const zone =
@@ -1068,7 +1967,10 @@ function renderEarthquakes(events) {
                         ],
                         {
                             radius:
-                                event.radius_km
+                                Number(
+                                    event.radius_km
+                                    || 0
+                                )
                                 * 1000,
 
                             color:
@@ -1078,13 +1980,19 @@ function renderEarthquakes(events) {
                                 color,
 
                             fillOpacity:
-                                0.035,
+                                isTest
+                                    ? 0.08
+                                    : 0.035,
 
                             weight:
-                                1,
+                                isTest
+                                    ? 2
+                                    : 1,
 
                             dashArray:
-                                "5 5"
+                                isTest
+                                    ? "8 6"
+                                    : "5 5"
                         }
                     )
                     .addTo(map);
@@ -1104,9 +2012,8 @@ function renderEarthquakes(events) {
 }
 
 
-
 /* =========================================================
-   EVENT FEED
+   EARTHQUAKE EVENT FEED
 ========================================================= */
 
 function renderEventFeed(events) {
@@ -1117,18 +2024,66 @@ function renderEventFeed(events) {
         );
 
 
+    if (!container) {
+
+        return;
+    }
+
+
     const displayEvents =
         [...events]
-        .sort(
-            (a, b) =>
-                b.magnitude
-                -
-                a.magnitude
-        )
-        .slice(
-            0,
-            12
-        );
+            .sort(
+                (a, b) => {
+
+                    const aTest =
+                        a.source === "TEST"
+                        ||
+                        a.simulated;
+
+
+                    const bTest =
+                        b.source === "TEST"
+                        ||
+                        b.simulated;
+
+
+                    if (
+                        aTest
+                        &&
+                        !bTest
+                    ) {
+
+                        return -1;
+                    }
+
+
+                    if (
+                        bTest
+                        &&
+                        !aTest
+                    ) {
+
+                        return 1;
+                    }
+
+
+                    return (
+                        Number(
+                            b.magnitude
+                            || 0
+                        )
+                        -
+                        Number(
+                            a.magnitude
+                            || 0
+                        )
+                    );
+                }
+            )
+            .slice(
+                0,
+                12
+            );
 
 
     if (
@@ -1136,15 +2091,11 @@ function renderEventFeed(events) {
         === 0
     ) {
 
-        container.innerHTML =
-            `
+        container.innerHTML = `
             <div class="empty-state">
-
-                No USGS M2.5+ earthquakes
-                currently available.
-
+                No earthquake events available.
             </div>
-            `;
+        `;
 
         return;
     }
@@ -1152,250 +2103,105 @@ function renderEventFeed(events) {
 
     container.innerHTML =
         displayEvents
-        .map(
-            event => {
+            .map(
+                event => {
 
-                return `
-                    <div
-                        class="event-card"
-                        onclick="
-                            focusEarthquake(
-                                ${event.latitude},
-                                ${event.longitude}
-                            )
-                        "
-                    >
+                    const isTest =
+                        event.source === "TEST"
+                        ||
+                        event.simulated;
 
-                        <div class="event-header">
 
-                            <span class="event-title">
+                    return `
+                        <div
+                            class="
+                                event-card
+                                ${isTest
+                                    ? "test-event-card"
+                                    : ""
+                                }
+                            "
 
-                                M${event.magnitude}
+                            onclick="
+                                focusEarthquake(
+                                    ${event.latitude},
+                                    ${event.longitude}
+                                )
+                            "
+                        >
 
-                                ${escapeHtml(
-                                    event.place
-                                )}
+                            <div class="event-header">
 
-                            </span>
+                                <span class="event-title">
 
-                            <span
-                                class="
-                                    severity
-                                    ${escapeHtml(
-                                        event.severity
+                                    M${Number(
+                                        event.magnitude
+                                        || 0
                                     )}
-                                "
-                            >
+
+                                    ${escapeHtml(
+                                        event.place
+                                        || ""
+                                    )}
+
+                                </span>
+
+
+                                <span
+                                    class="
+                                        ${isTest
+                                            ? "test-source"
+                                            : "live-source"
+                                        }
+                                    "
+                                >
+
+                                    ${isTest
+                                        ? "LOCAL TEST"
+                                        : "USGS"
+                                    }
+
+                                </span>
+
+                            </div>
+
+
+                            <div class="event-type">
 
                                 ${escapeHtml(
                                     event.severity
+                                    || "low"
                                 )}
 
-                            </span>
+                                · Radius
 
-                        </div>
+                                ${Number(
+                                    event.radius_km
+                                    || 0
+                                )}
+                                km
 
-
-                        <div class="event-type">
-
-                            LIVE USGS
-
-                            ·
-
-                            Depth
-                            ${
-                                event.depth_km
-                                ?? "?"
-                            }
-                            km
-
-                        </div>
+                            </div>
 
 
-                        <div class="event-description">
+                            <div class="event-description">
 
-                            ${
-                                formatEventAge(
+                                ${formatEventAge(
                                     event.timestamp
-                                )
-                            }
+                                )}
+
+                            </div>
 
                         </div>
-
-                    </div>
-                `;
-            }
-        )
-        .join("");
+                    `;
+                }
+            )
+            .join("");
 }
 
 
-
 /* =========================================================
-   ANALYTICS
-========================================================= */
-
-async function loadAnalytics() {
-
-    try {
-
-        const response =
-            await fetch(
-                `${API_URL}/analytics`
-            );
-
-
-        const data =
-            await response.json();
-
-
-        document
-            .getElementById(
-                "totalInfrastructure"
-            )
-            .textContent =
-            data.total_infrastructure
-            || 0;
-
-
-        document
-            .getElementById(
-                "liveEarthquakes"
-            )
-            .textContent =
-            data.live_earthquakes
-            || 0;
-
-
-        document
-            .getElementById(
-                "affectedAssets"
-            )
-            .textContent =
-            data.affected_assets
-            || 0;
-
-
-        document
-            .getElementById(
-                "highRisk"
-            )
-            .textContent =
-            data.high_risk_assets
-            || 0;
-
-
-        document
-            .getElementById(
-                "criticalEvents"
-            )
-            .textContent =
-            data.critical_events
-            || 0;
-
-
-        document
-            .getElementById(
-                "feedStatus"
-            )
-            .textContent =
-            data.live
-            ?
-            "LIVE"
-            :
-            "CACHE";
-
-
-        const source =
-            document.getElementById(
-                "dataSourceStatus"
-            );
-
-
-        source.textContent =
-            data.live
-            ?
-            "USGS LIVE"
-            :
-            "USGS CACHE";
-
-
-        source.classList.toggle(
-            "stale",
-            !data.live
-        );
-
-
-        renderTypeStats(
-            data.by_type
-            || {}
-        );
-
-    }
-
-    catch (error) {
-
-        console.error(
-            "Analytics error:",
-            error
-        );
-    }
-}
-
-
-
-/* =========================================================
-   TYPE STATS
-========================================================= */
-
-function renderTypeStats(stats) {
-
-    const container =
-        document.getElementById(
-            "typeStats"
-        );
-
-
-    container.innerHTML =
-        Object
-        .entries(stats)
-        .map(
-            ([type, count]) => {
-
-                return `
-                    <div class="type-stat">
-
-                        <div class="type-stat-name">
-
-                            <span
-                                class="type-color-dot"
-                                style="
-                                    background:
-                                    ${getInfrastructureColor(type)}
-                                "
-                            ></span>
-
-                            ${escapeHtml(type)}
-
-                        </div>
-
-                        <div class="type-stat-count">
-
-                            ${count}
-
-                        </div>
-
-                    </div>
-                `;
-            }
-        )
-        .join("");
-}
-
-
-
-/* =========================================================
-   LOAD EVENTS
+   LOAD EARTHQUAKES
 ========================================================= */
 
 async function loadEarthquakes() {
@@ -1406,6 +2212,14 @@ async function loadEarthquakes() {
             await fetch(
                 `${API_URL}/events`
             );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Earthquake request failed"
+            );
+        }
 
 
         const data =
@@ -1422,16 +2236,31 @@ async function loadEarthquakes() {
         );
 
 
-        document
-            .getElementById(
+        const sourceStatus =
+            document.getElementById(
                 "dataSourceStatus"
-            )
-            .textContent =
-            data.live
-            ?
-            "USGS LIVE"
-            :
-            "USGS CACHE";
+            );
+
+
+        if (sourceStatus) {
+
+            sourceStatus.textContent =
+                Number(
+                    data.test_event_count
+                    || 0
+                )
+                > 0
+                    ?
+                    "USGS + LOCAL TEST"
+                    :
+                    (
+                        data.live
+                            ?
+                            "USGS LIVE"
+                            :
+                            "USGS CACHE"
+                    );
+        }
 
     }
 
@@ -1441,94 +2270,863 @@ async function loadEarthquakes() {
             "Earthquake load error:",
             error
         );
-
-
-        document
-            .getElementById(
-                "dataSourceStatus"
-            )
-            .textContent =
-            "USGS OFFLINE";
     }
 }
 
 
-
 /* =========================================================
-   WEBSOCKET EVENTS
+   ANALYTICS
 ========================================================= */
 
-function connectEventSocket() {
+async function loadAnalytics() {
 
-    const protocol =
-        window.location.protocol
-        === "https:"
-        ?
-        "wss"
-        :
-        "ws";
+    try {
+
+        const response =
+            await fetch(
+                `${API_URL}/analytics`
+            );
 
 
-    eventSocket =
-        new WebSocket(
-            `${protocol}://${window.location.hostname}:8000/ws/events`
+        if (!response.ok) {
+
+            throw new Error(
+                "Analytics request failed"
+            );
+        }
+
+
+        const data =
+            await response.json();
+
+
+        setTextIfExists(
+            "totalInfrastructure",
+            data.total_infrastructure
+            || 0
         );
 
 
-    eventSocket.onopen =
+        setTextIfExists(
+            "liveEarthquakes",
+            data.live_earthquakes
+            || 0
+        );
+
+
+        setTextIfExists(
+            "affectedAssets",
+            data.affected_assets
+            || 0
+        );
+
+
+        setTextIfExists(
+            "highRisk",
+            data.high_risk_assets
+            || 0
+        );
+
+
+        setTextIfExists(
+            "criticalEvents",
+            data.critical_events
+            || 0
+        );
+
+
+        setTextIfExists(
+            "feedStatus",
+            Number(
+                data.test_events
+                || 0
+            )
+            > 0
+                ?
+                "TEST"
+                :
+                (
+                    data.live
+                        ?
+                        "LIVE"
+                        :
+                        "CACHE"
+                )
+        );
+
+
+        renderTypeStats(
+            data.by_type
+            || {}
+        );
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Analytics load error:",
+            error
+        );
+    }
+}
+
+
+/* =========================================================
+   TYPE STATISTICS
+========================================================= */
+
+function renderTypeStats(stats) {
+
+    const container =
+        document.getElementById(
+            "typeStats"
+        );
+
+
+    if (!container) {
+
+        return;
+    }
+
+
+    const entries =
+        Object.entries(
+            stats
+        );
+
+
+    if (
+        entries.length
+        === 0
+    ) {
+
+        container.innerHTML = `
+            <div class="empty-state">
+                No infrastructure data available.
+            </div>
+        `;
+
+        return;
+    }
+
+
+    container.innerHTML =
+        entries
+            .map(
+                ([type, count]) => {
+
+                    return `
+                        <div class="type-stat">
+
+                            <div class="type-stat-name">
+
+                                <span
+                                    class="type-color-dot"
+
+                                    style="
+                                        background:
+                                        ${getInfrastructureColor(type)}
+                                    "
+                                ></span>
+
+                                ${escapeHtml(type)}
+
+                            </div>
+
+
+                            <div class="type-stat-count">
+
+                                ${count}
+
+                            </div>
+
+                        </div>
+                    `;
+                }
+            )
+            .join("");
+}
+
+
+/* =========================================================
+   TEST EVENT STATUS
+========================================================= */
+
+async function loadTestEventStatus() {
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_URL}/test-event`
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Test event status request failed"
+            );
+        }
+
+
+        const data =
+            await response.json();
+
+
+        activeTestEvent =
+            data.event
+            || null;
+
+
+        updateTestControls();
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Test event status error:",
+            error
+        );
+    }
+}
+
+
+/* =========================================================
+   UPDATE TEST CONTROLS
+========================================================= */
+
+function updateTestControls() {
+
+    const indicator =
+        document.getElementById(
+            "testModeIndicator"
+        );
+
+
+    const status =
+        document.getElementById(
+            "testEventStatus"
+        );
+
+
+    const createButton =
+        document.getElementById(
+            "createTestEvent"
+        );
+
+
+    const removeButton =
+        document.getElementById(
+            "removeTestEvent"
+        );
+
+
+    if (
+        !indicator
+        ||
+        !status
+        ||
+        !createButton
+        ||
+        !removeButton
+    ) {
+
+        return;
+    }
+
+
+    if (activeTestEvent) {
+
+        indicator.textContent =
+            "ACTIVE";
+
+
+        indicator.classList.remove(
+            "inactive"
+        );
+
+
+        indicator.classList.add(
+            "active"
+        );
+
+
+        createButton.disabled =
+            true;
+
+
+        removeButton.disabled =
+            false;
+
+
+        status.innerHTML = `
+            <strong>
+                LOCAL TEST EVENT ACTIVE
+            </strong>
+
+            <br>
+
+            ${escapeHtml(
+                activeTestEvent.title
+                || ""
+            )}
+
+            <br>
+
+            ${escapeHtml(
+                activeTestEvent.target_asset_name
+                ||
+                activeTestEvent.place
+                ||
+                ""
+            )}
+
+            <br>
+
+            Radius:
+
+            ${Number(
+                activeTestEvent.radius_km
+                || 0
+            )}
+            km
+
+            <br>
+
+            <span
+                style="
+                    color:#748b9c;
+                "
+            >
+                Project-only simulation.
+                Nothing is sent externally.
+            </span>
+        `;
+
+    }
+
+    else {
+
+        indicator.textContent =
+            "OFF";
+
+
+        indicator.classList.remove(
+            "active"
+        );
+
+
+        indicator.classList.add(
+            "inactive"
+        );
+
+
+        createButton.disabled =
+            false;
+
+
+        removeButton.disabled =
+            true;
+
+
+        status.textContent =
+            "No simulated event active.";
+    }
+}
+
+
+/* =========================================================
+   CREATE TEST EVENT
+========================================================= */
+
+async function createTestEvent() {
+
+    const assetElement =
+        document.getElementById(
+            "testAsset"
+        );
+
+
+    const magnitudeElement =
+        document.getElementById(
+            "testMagnitude"
+        );
+
+
+    const radiusElement =
+        document.getElementById(
+            "testRadius"
+        );
+
+
+    if (
+        !assetElement
+        ||
+        !magnitudeElement
+        ||
+        !radiusElement
+    ) {
+
+        return;
+    }
+
+
+    const assetId =
+        Number(
+            assetElement.value
+        );
+
+
+    const magnitude =
+        Number(
+            magnitudeElement.value
+        );
+
+
+    const radiusKm =
+        Number(
+            radiusElement.value
+        );
+
+
+    if (!assetId) {
+
+        showTestMessage(
+            "Select an infrastructure asset first.",
+            true
+        );
+
+        return;
+    }
+
+
+    if (
+        !Number.isFinite(
+            magnitude
+        )
+        ||
+        magnitude < 2.5
+        ||
+        magnitude > 9.5
+    ) {
+
+        showTestMessage(
+            "Magnitude must be between 2.5 and 9.5.",
+            true
+        );
+
+        return;
+    }
+
+
+    if (
+        !Number.isFinite(
+            radiusKm
+        )
+        ||
+        radiusKm <= 0
+    ) {
+
+        showTestMessage(
+            "Enter a valid radius.",
+            true
+        );
+
+        return;
+    }
+
+
+    const button =
+        document.getElementById(
+            "createTestEvent"
+        );
+
+
+    if (button) {
+
+        button.disabled =
+            true;
+
+        button.textContent =
+            "Creating...";
+    }
+
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_URL}/test-event`,
+                {
+                    method:
+                        "POST",
+
+                    headers:
+                        {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                    body:
+                        JSON.stringify(
+                            {
+                                asset_id:
+                                    assetId,
+
+                                magnitude:
+                                    magnitude,
+
+                                radius_km:
+                                    radiusKm,
+
+                                latitude_offset:
+                                    0,
+
+                                longitude_offset:
+                                    0
+                            }
+                        )
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.detail
+                ||
+                "Unable to create test event"
+            );
+        }
+
+
+        activeTestEvent =
+            data.event
+            || null;
+
+
+        updateTestControls();
+
+
+        showTestMessage(
+            "Local test earthquake created. No external system was contacted.",
+            false
+        );
+
+
+        await refreshDashboard();
+
+
+        if (
+            activeTestEvent
+            &&
+            activeTestEvent.latitude != null
+            &&
+            activeTestEvent.longitude != null
+        ) {
+
+            map.flyTo(
+                [
+                    activeTestEvent.latitude,
+                    activeTestEvent.longitude
+                ],
+                8,
+                {
+                    duration:
+                        1.2
+                }
+            );
+        }
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Create test event error:",
+            error
+        );
+
+
+        showTestMessage(
+            error.message,
+            true
+        );
+
+    }
+
+    finally {
+
+        if (button) {
+
+            button.textContent =
+                "Create Test Earthquake";
+        }
+
+
+        updateTestControls();
+    }
+}
+
+
+/* =========================================================
+   REMOVE TEST EVENT
+========================================================= */
+
+async function removeTestEvent() {
+
+    const button =
+        document.getElementById(
+            "removeTestEvent"
+        );
+
+
+    if (button) {
+
+        button.disabled =
+            true;
+
+        button.textContent =
+            "Removing...";
+    }
+
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_URL}/test-event`,
+                {
+                    method:
+                        "DELETE"
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.detail
+                ||
+                "Unable to remove test event"
+            );
+        }
+
+
+        activeTestEvent =
+            null;
+
+
+        showTestMessage(
+            "Local test earthquake removed.",
+            false
+        );
+
+
+        await refreshDashboard();
+
+
+        map.setView(
+            [20, 5],
+            2
+        );
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Remove test event error:",
+            error
+        );
+
+
+        showTestMessage(
+            error.message,
+            true
+        );
+
+    }
+
+    finally {
+
+        if (button) {
+
+            button.textContent =
+                "Remove Test Earthquake";
+        }
+
+
+        updateTestControls();
+    }
+}
+
+
+/* =========================================================
+   TEST MESSAGE
+========================================================= */
+
+function showTestMessage(
+    message,
+    isError
+) {
+
+    const status =
+        document.getElementById(
+            "testEventStatus"
+        );
+
+
+    if (!status) {
+
+        return;
+    }
+
+
+    status.textContent =
+        message;
+
+
+    status.classList.toggle(
+        "error",
+        Boolean(
+            isError
+        )
+    );
+}
+
+
+/* =========================================================
+   SENSOR WEBSOCKET
+========================================================= */
+
+function connectSensorSocket() {
+
+    const url =
+        `${getWebSocketBaseURL()}/ws/sensors`;
+
+
+    sensorSocket =
+        new WebSocket(
+            url
+        );
+
+
+    sensorSocket.onopen =
         () => {
 
             console.log(
-                "USGS live WebSocket connected"
+                "Local sensor WebSocket connected"
             );
         };
 
 
-    eventSocket.onmessage =
-        async event => {
+    sensorSocket.onmessage =
+        event => {
 
-            const message =
-                JSON.parse(
-                    event.data
-                );
+            try {
+
+                const message =
+                    JSON.parse(
+                        event.data
+                    );
 
 
-            if (
-                message.type
-                === "earthquakes"
-            ) {
+                /*
+                    Accept only our local project stream.
+                */
 
-                earthquakeData =
+                if (
+                    message.type
+                    !== "sensor_telemetry"
+                ) {
+
+                    return;
+                }
+
+
+                if (
+                    message.source
+                    !== "LOCAL_PROJECT"
+                ) {
+
+                    console.warn(
+                        "Rejected unexpected sensor source:",
+                        message.source
+                    );
+
+                    return;
+                }
+
+
+                if (
+                    message.external
+                    !== false
+                ) {
+
+                    console.warn(
+                        "Rejected sensor message not marked local."
+                    );
+
+                    return;
+                }
+
+
+                updateSensorStore(
                     message.data
-                    || [];
-
-
-                renderEarthquakes(
-                    earthquakeData
+                    || []
                 );
 
 
-                await Promise.all(
-                    [
-                        loadRisk(),
-                        loadAnalytics(),
-                        loadLocations()
-                    ]
+                refreshMarkerTelemetry();
+
+            }
+
+            catch (error) {
+
+                console.error(
+                    "Sensor WebSocket message error:",
+                    error
                 );
             }
         };
 
 
-    eventSocket.onclose =
+    sensorSocket.onerror =
+        error => {
+
+            console.error(
+                "Sensor WebSocket error:",
+                error
+            );
+        };
+
+
+    sensorSocket.onclose =
         () => {
 
+            console.log(
+                "Local sensor WebSocket disconnected. Reconnecting..."
+            );
+
+
             setTimeout(
-                connectEventSocket,
+                connectSensorSocket,
                 5000
             );
         };
 }
-
 
 
 /* =========================================================
@@ -1537,45 +3135,72 @@ function connectEventSocket() {
 
 function connectLocationSocket() {
 
-    const protocol =
-        window.location.protocol
-        === "https:"
-        ?
-        "wss"
-        :
-        "ws";
-
-
     locationSocket =
         new WebSocket(
-            `${protocol}://${window.location.hostname}:8000/ws/locations`
+            `${getWebSocketBaseURL()}/ws/locations`
         );
+
+
+    locationSocket.onopen =
+        () => {
+
+            console.log(
+                "Location WebSocket connected"
+            );
+        };
 
 
     locationSocket.onmessage =
         event => {
 
-            const message =
-                JSON.parse(
-                    event.data
+            try {
+
+                const message =
+                    JSON.parse(
+                        event.data
+                    );
+
+
+                if (
+                    message.type
+                    !== "locations"
+                ) {
+
+                    return;
+                }
+
+
+                infrastructureData =
+                    message.data
+                    || [];
+
+
+                populateTestAssetSelect(
+                    infrastructureData
                 );
 
 
-            if (
-                message.type
-                === "locations"
-            ) {
-
-                infrastructureData =
-                    message.data;
-
                 applyFilters();
+
+            }
+
+            catch (error) {
+
+                console.error(
+                    "Location WebSocket error:",
+                    error
+                );
             }
         };
 
 
     locationSocket.onclose =
         () => {
+
+            console.log(
+                "Location WebSocket disconnected. Reconnecting..."
+            );
+
 
             setTimeout(
                 connectLocationSocket,
@@ -1585,9 +3210,126 @@ function connectLocationSocket() {
 }
 
 
+/* =========================================================
+   EVENT WEBSOCKET
+========================================================= */
+
+function connectEventSocket() {
+
+    eventSocket =
+        new WebSocket(
+            `${getWebSocketBaseURL()}/ws/events`
+        );
+
+
+    eventSocket.onopen =
+        () => {
+
+            console.log(
+                "Earthquake WebSocket connected"
+            );
+        };
+
+
+    eventSocket.onmessage =
+        event => {
+
+            try {
+
+                const message =
+                    JSON.parse(
+                        event.data
+                    );
+
+
+                if (
+                    message.type
+                    !== "earthquakes"
+                ) {
+
+                    return;
+                }
+
+
+                earthquakeData =
+                    message.data
+                    || [];
+
+
+                riskData =
+                    message.risk
+                    || [];
+
+
+                renderEarthquakes(
+                    earthquakeData
+                );
+
+
+                renderRiskFeed(
+                    riskData
+                );
+
+
+                applyFilters();
+
+
+                loadAnalytics();
+
+                loadTestEventStatus();
+
+            }
+
+            catch (error) {
+
+                console.error(
+                    "Earthquake WebSocket error:",
+                    error
+                );
+            }
+        };
+
+
+    eventSocket.onclose =
+        () => {
+
+            console.log(
+                "Earthquake WebSocket disconnected. Reconnecting..."
+            );
+
+
+            setTimeout(
+                connectEventSocket,
+                5000
+            );
+        };
+}
+
 
 /* =========================================================
-   MAP FOCUS
+   FULL DASHBOARD REFRESH
+========================================================= */
+
+async function refreshDashboard() {
+
+    await Promise.all(
+        [
+            loadLocations(),
+            loadSensorTelemetry(),
+            loadRisk(),
+            loadAnalytics(),
+            loadEarthquakes(),
+            loadTestEventStatus()
+        ]
+    );
+
+
+    refreshMarkerTelemetry();
+}
+
+
+/* =========================================================
+   MAP FOCUS HELPERS
 ========================================================= */
 
 function focusEarthquake(
@@ -1628,7 +3370,6 @@ function focusAsset(
 }
 
 
-
 /* =========================================================
    EVENT AGE
 ========================================================= */
@@ -1636,6 +3377,7 @@ function focusAsset(
 function formatEventAge(timestamp) {
 
     if (!timestamp) {
+
         return "Time unavailable";
     }
 
@@ -1644,6 +3386,16 @@ function formatEventAge(timestamp) {
         new Date(
             timestamp
         );
+
+
+    if (
+        Number.isNaN(
+            eventTime.getTime()
+        )
+    ) {
+
+        return "Time unavailable";
+    }
 
 
     const seconds =
@@ -1655,16 +3407,15 @@ function formatEventAge(timestamp) {
                     -
                     eventTime.getTime()
                 )
-                / 1000
+                /
+                1000
             )
         );
 
 
     if (seconds < 60) {
 
-        return (
-            `${seconds} sec ago`
-        );
+        return `${seconds} sec ago`;
     }
 
 
@@ -1676,9 +3427,7 @@ function formatEventAge(timestamp) {
 
     if (minutes < 60) {
 
-        return (
-            `${minutes} min ago`
-        );
+        return `${minutes} min ago`;
     }
 
 
@@ -1690,23 +3439,45 @@ function formatEventAge(timestamp) {
 
     if (hours < 24) {
 
-        return (
-            `${hours} hr ago`
-        );
+        return `${hours} hr ago`;
     }
 
 
-    return (
-        `${Math.floor(
+    const days =
+        Math.floor(
             hours / 24
-        )} day ago`
-    );
+        );
+
+
+    return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
 
+/* =========================================================
+   SAFE TEXT SETTER
+========================================================= */
+
+function setTextIfExists(
+    id,
+    value
+) {
+
+    const element =
+        document.getElementById(
+            id
+        );
+
+
+    if (element) {
+
+        element.textContent =
+            value;
+    }
+}
+
 
 /* =========================================================
-   ESCAPE HTML
+   HTML ESCAPING
 ========================================================= */
 
 function escapeHtml(value) {
@@ -1737,9 +3508,8 @@ function escapeHtml(value) {
 }
 
 
-
 /* =========================================================
-   START
+   START APPLICATION
 ========================================================= */
 
 window.addEventListener(
@@ -1749,48 +3519,116 @@ window.addEventListener(
         initMap();
 
 
-        document
-            .getElementById(
+        const searchBox =
+            document.getElementById(
                 "searchBox"
-            )
-            .addEventListener(
+            );
+
+
+        const typeFilter =
+            document.getElementById(
+                "typeFilter"
+            );
+
+
+        const riskFilter =
+            document.getElementById(
+                "riskFilter"
+            );
+
+
+        const createButton =
+            document.getElementById(
+                "createTestEvent"
+            );
+
+
+        const removeButton =
+            document.getElementById(
+                "removeTestEvent"
+            );
+
+
+        if (searchBox) {
+
+            searchBox.addEventListener(
                 "input",
                 applyFilters
             );
+        }
 
 
-        document
-            .getElementById(
-                "typeFilter"
-            )
-            .addEventListener(
+        if (typeFilter) {
+
+            typeFilter.addEventListener(
                 "change",
                 applyFilters
             );
+        }
 
 
-        document
-            .getElementById(
-                "riskFilter"
-            )
-            .addEventListener(
+        if (riskFilter) {
+
+            riskFilter.addEventListener(
                 "change",
                 applyFilters
             );
+        }
 
 
-        await Promise.all(
-            [
-                loadLocations(),
-                loadRisk(),
-                loadAnalytics(),
-                loadEarthquakes()
-            ]
-        );
+        if (createButton) {
 
+            createButton.addEventListener(
+                "click",
+                createTestEvent
+            );
+        }
+
+
+        if (removeButton) {
+
+            removeButton.addEventListener(
+                "click",
+                removeTestEvent
+            );
+        }
+
+
+        /*
+            Initial REST load
+        */
+
+        await refreshDashboard();
+
+
+        /*
+            Start real-time project-local streams
+        */
+
+        connectSensorSocket();
 
         connectLocationSocket();
 
         connectEventSocket();
+
+
+        console.log(
+            "Infrastructure Monitor started."
+        );
+
+
+        console.log(
+            "Sensor telemetry source: LOCAL_PROJECT"
+        );
+
+
+        console.log(
+            "External sensor transmission: DISABLED"
+        );
+
+
+        console.log(
+            "USGS earthquake integration: READ ONLY"
+        );
     }
 );

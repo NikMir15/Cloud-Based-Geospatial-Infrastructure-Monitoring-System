@@ -1,9 +1,7 @@
 <!DOCTYPE html>
-
 <html lang="en">
 
 <head>
-
     <meta charset="UTF-8">
 
     <meta
@@ -15,22 +13,15 @@
         Infrastructure Situational Awareness Platform
     </title>
 
-
     <link
         rel="icon"
         href="favicon.ico"
     >
 
-
-    <!-- Leaflet -->
-
     <link
         rel="stylesheet"
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     >
-
-
-    <!-- Marker Cluster -->
 
     <link
         rel="stylesheet"
@@ -42,27 +33,20 @@
         href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
     >
 
-
     <link
         rel="stylesheet"
         href="style.css"
     >
-
 </head>
 
 
 <body>
 
-
-<!-- =====================================================
-     MAP
-===================================================== -->
-
 <div id="map"></div>
 
 
 <!-- =====================================================
-     COMMAND CENTRE
+     COMMAND PANEL
 ===================================================== -->
 
 <aside class="command-panel">
@@ -94,7 +78,6 @@
                 ONLINE
             </div>
 
-
             <div
                 id="dataSourceStatus"
                 class="live-source"
@@ -125,7 +108,7 @@
     </div>
 
 
-    <!-- TYPE FILTER -->
+    <!-- INFRA TYPE FILTER -->
 
     <div class="control-section">
 
@@ -182,7 +165,6 @@
     <!-- KPI GRID -->
 
     <div class="kpi-grid">
-
 
         <div class="kpi-card">
 
@@ -267,41 +249,149 @@
     </div>
 
 
-    <!-- INFRASTRUCTURE DISTRIBUTION -->
+    <!-- =================================================
+         PHASE 6.1 TEST MODE
+    ================================================== -->
 
-    <section class="panel-section">
+    <section class="panel-section test-section">
 
-        <div class="section-title">
+        <div class="section-title-row">
 
-            ASSET DISTRIBUTION
+            <div class="section-title">
+                PHASE 6.1 TEST MODE
+            </div>
+
+            <div
+                id="testModeIndicator"
+                class="test-indicator inactive"
+            >
+                OFF
+            </div>
 
         </div>
 
 
-        <div id="typeStats">
+        <div class="test-warning">
 
-            Loading...
+            Simulated events are clearly marked
+            as TEST and are never treated as
+            real USGS earthquakes.
 
+        </div>
+
+
+        <div class="test-control">
+
+            <label for="testAsset">
+                TARGET INFRASTRUCTURE
+            </label>
+
+            <select id="testAsset">
+
+                <option value="">
+                    Select infrastructure...
+                </option>
+
+            </select>
+
+        </div>
+
+
+        <div class="test-grid">
+
+            <div class="test-control">
+
+                <label for="testMagnitude">
+                    MAGNITUDE
+                </label>
+
+                <input
+                    id="testMagnitude"
+                    type="number"
+                    min="2.5"
+                    max="9.5"
+                    step="0.1"
+                    value="6.2"
+                >
+
+            </div>
+
+
+            <div class="test-control">
+
+                <label for="testRadius">
+                    RADIUS KM
+                </label>
+
+                <input
+                    id="testRadius"
+                    type="number"
+                    min="1"
+                    max="2000"
+                    step="1"
+                    value="200"
+                >
+
+            </div>
+
+        </div>
+
+
+        <button
+            id="createTestEvent"
+            class="test-button create-button"
+            type="button"
+        >
+            Create Test Earthquake
+        </button>
+
+
+        <button
+            id="removeTestEvent"
+            class="test-button remove-button"
+            type="button"
+            disabled
+        >
+            Remove Test Earthquake
+        </button>
+
+
+        <div
+            id="testEventStatus"
+            class="test-status"
+        >
+            No simulated event active.
         </div>
 
     </section>
 
 
-    <!-- HIGH-RISK ASSETS -->
+    <!-- ASSET DISTRIBUTION -->
+
+    <section class="panel-section">
+
+        <div class="section-title">
+            ASSET DISTRIBUTION
+        </div>
+
+        <div id="typeStats">
+            Loading...
+        </div>
+
+    </section>
+
+
+    <!-- EXPOSED INFRASTRUCTURE -->
 
     <section class="panel-section">
 
         <div class="section-title-row">
 
             <div class="section-title">
-
                 EXPOSED INFRASTRUCTURE
-
             </div>
 
-            <span
-                class="warning-dot"
-            ></span>
+            <span class="warning-dot"></span>
 
         </div>
 
@@ -310,9 +400,7 @@
             id="riskFeed"
             class="event-feed"
         >
-
             Loading risk data...
-
         </div>
 
     </section>
@@ -325,14 +413,10 @@
         <div class="section-title-row">
 
             <div class="section-title">
-
-                LIVE USGS EARTHQUAKES
-
+                LIVE / TEST EARTHQUAKES
             </div>
 
-            <span
-                class="live-dot"
-            ></span>
+            <span class="live-dot"></span>
 
         </div>
 
@@ -341,28 +425,22 @@
             id="eventFeed"
             class="event-feed"
         >
-
-            Loading live earthquakes...
-
+            Loading earthquake feed...
         </div>
 
     </section>
-
 
 </aside>
 
 
 <!-- =====================================================
-     LEGEND
+     MAP LEGEND
 ===================================================== -->
 
 <div class="map-legend">
 
-
     <div class="legend-title">
-
         INFRASTRUCTURE
-
     </div>
 
 
@@ -397,9 +475,7 @@
 
 
     <div class="legend-title risk-legend-title">
-
         ESTIMATED EXPOSURE
-
     </div>
 
 
@@ -424,20 +500,20 @@
 
 
     <div class="legend-title earthquake-legend-title">
-
-        LIVE DATA
-
+        EVENT SOURCE
     </div>
 
 
     <div class="legend-row">
 
         <span>
-
             <i class="legend-dot quake"></i>
+            USGS
+        </span>
 
-            USGS Earthquake
-
+        <span>
+            <i class="legend-dot test-quake"></i>
+            TEST
         </span>
 
     </div>
@@ -445,22 +521,15 @@
 </div>
 
 
-<!-- Leaflet -->
-
 <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
 ></script>
-
-
-<!-- Marker Cluster -->
 
 <script
     src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"
 ></script>
 
-
 <script src="app.js"></script>
-
 
 </body>
 

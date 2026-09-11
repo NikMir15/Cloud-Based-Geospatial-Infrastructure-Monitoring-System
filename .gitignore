@@ -17,3 +17,9 @@ backend/venv/
 # Logs
 *.log
 *.backup
+
+.env
+*.before-local-sensors
+*.before-live-sensors
+__pycache__/
+*.pyc
