@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Infrastructure Situational Awareness Platform
+    </title>
+
+
+    <link
+        rel="icon"
+        href="favicon.ico"
+    >
+
+
+    <!-- Leaflet -->
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    >
+
+
+    <!-- Marker Cluster -->
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+    >
+
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+
+</head>
+
+
+<body>
+
+
+<!-- =====================================================
+     MAP
+===================================================== -->
+
+<div id="map"></div>
+
+
+<!-- =====================================================
+     COMMAND CENTRE
+===================================================== -->
+
+<aside class="command-panel">
+
+
+    <!-- HEADER -->
+
+    <div class="brand-row">
+
+        <div>
+
+            <div class="eyebrow">
+                GEO INTELLIGENCE
+            </div>
+
+            <h1>
+                Infrastructure Monitor
+            </h1>
+
+        </div>
+
+
+        <div class="status-column">
+
+            <div
+                id="systemStatus"
+                class="status-badge online"
+            >
+                ONLINE
+            </div>
+
+
+            <div
+                id="dataSourceStatus"
+                class="live-source"
+            >
+                USGS LIVE
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- SEARCH -->
+
+    <div class="control-section">
+
+        <label for="searchBox">
+            SEARCH ASSETS
+        </label>
+
+        <input
+            id="searchBox"
+            type="text"
+            placeholder="Search infrastructure..."
+            autocomplete="off"
+        >
+
+    </div>
+
+
+    <!-- TYPE FILTER -->
+
+    <div class="control-section">
+
+        <label for="typeFilter">
+            INFRASTRUCTURE TYPE
+        </label>
+
+        <select id="typeFilter">
+
+            <option value="all">
+                All Infrastructure
+            </option>
+
+        </select>
+
+    </div>
+
+
+    <!-- RISK FILTER -->
+
+    <div class="control-section">
+
+        <label for="riskFilter">
+            ESTIMATED RISK
+        </label>
+
+        <select id="riskFilter">
+
+            <option value="all">
+                All Risk Levels
+            </option>
+
+            <option value="critical">
+                Critical
+            </option>
+
+            <option value="high">
+                High
+            </option>
+
+            <option value="medium">
+                Medium
+            </option>
+
+            <option value="low">
+                Low
+            </option>
+
+        </select>
+
+    </div>
+
+
+    <!-- KPI GRID -->
+
+    <div class="kpi-grid">
+
+
+        <div class="kpi-card">
+
+            <span>
+                Infrastructure
+            </span>
+
+            <strong id="totalInfrastructure">
+                0
+            </strong>
+
+        </div>
+
+
+        <div class="kpi-card earthquake-card">
+
+            <span>
+                Live Earthquakes
+            </span>
+
+            <strong id="liveEarthquakes">
+                0
+            </strong>
+
+        </div>
+
+
+        <div class="kpi-card affected-card">
+
+            <span>
+                Affected Assets
+            </span>
+
+            <strong id="affectedAssets">
+                0
+            </strong>
+
+        </div>
+
+
+        <div class="kpi-card risk-card">
+
+            <span>
+                High Risk
+            </span>
+
+            <strong id="highRisk">
+                0
+            </strong>
+
+        </div>
+
+
+        <div class="kpi-card critical-card">
+
+            <span>
+                Critical Events
+            </span>
+
+            <strong id="criticalEvents">
+                0
+            </strong>
+
+        </div>
+
+
+        <div class="kpi-card">
+
+            <span>
+                Feed
+            </span>
+
+            <strong
+                id="feedStatus"
+                class="feed-value"
+            >
+                LIVE
+            </strong>
+
+        </div>
+
+    </div>
+
+
+    <!-- INFRASTRUCTURE DISTRIBUTION -->
+
+    <section class="panel-section">
+
+        <div class="section-title">
+
+            ASSET DISTRIBUTION
+
+        </div>
+
+
+        <div id="typeStats">
+
+            Loading...
+
+        </div>
+
+    </section>
+
+
+    <!-- HIGH-RISK ASSETS -->
+
+    <section class="panel-section">
+
+        <div class="section-title-row">
+
+            <div class="section-title">
+
+                EXPOSED INFRASTRUCTURE
+
+            </div>
+
+            <span
+                class="warning-dot"
+            ></span>
+
+        </div>
+
+
+        <div
+            id="riskFeed"
+            class="event-feed"
+        >
+
+            Loading risk data...
+
+        </div>
+
+    </section>
+
+
+    <!-- LIVE EARTHQUAKES -->
+
+    <section class="panel-section">
+
+        <div class="section-title-row">
+
+            <div class="section-title">
+
+                LIVE USGS EARTHQUAKES
+
+            </div>
+
+            <span
+                class="live-dot"
+            ></span>
+
+        </div>
+
+
+        <div
+            id="eventFeed"
+            class="event-feed"
+        >
+
+            Loading live earthquakes...
+
+        </div>
+
+    </section>
+
+
+</aside>
+
+
+<!-- =====================================================
+     LEGEND
+===================================================== -->
+
+<div class="map-legend">
+
+
+    <div class="legend-title">
+
+        INFRASTRUCTURE
+
+    </div>
+
+
+    <div class="legend-row">
+
+        <span>
+            <i class="legend-dot cloud"></i>
+            Cloud
+        </span>
+
+        <span>
+            <i class="legend-dot education"></i>
+            Education
+        </span>
+
+        <span>
+            <i class="legend-dot healthcare"></i>
+            Healthcare
+        </span>
+
+        <span>
+            <i class="legend-dot transport"></i>
+            Transport
+        </span>
+
+        <span>
+            <i class="legend-dot telecom"></i>
+            Telecom
+        </span>
+
+    </div>
+
+
+    <div class="legend-title risk-legend-title">
+
+        ESTIMATED EXPOSURE
+
+    </div>
+
+
+    <div class="legend-row">
+
+        <span>
+            <i class="legend-dot risk-medium"></i>
+            Medium
+        </span>
+
+        <span>
+            <i class="legend-dot risk-high"></i>
+            High
+        </span>
+
+        <span>
+            <i class="legend-dot risk-critical"></i>
+            Critical
+        </span>
+
+    </div>
+
+
+    <div class="legend-title earthquake-legend-title">
+
+        LIVE DATA
+
+    </div>
+
+
+    <div class="legend-row">
+
+        <span>
+
+            <i class="legend-dot quake"></i>
+
+            USGS Earthquake
+
+        </span>
+
+    </div>
+
+</div>
+
+
+<!-- Leaflet -->
+
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+></script>
+
+
+<!-- Marker Cluster -->
+
+<script
+    src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"
+></script>
+
+
+<script src="app.js"></script>
+
+
+</body>
+
+</html>

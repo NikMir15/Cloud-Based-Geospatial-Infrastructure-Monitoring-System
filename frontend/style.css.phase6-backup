@@ -1,0 +1,1254 @@
+/* =========================================================
+   GLOBAL
+========================================================= */
+
+* {
+    box-sizing: border-box;
+}
+
+
+html,
+body {
+
+    width: 100%;
+    height: 100%;
+
+    margin: 0;
+    padding: 0;
+
+    overflow: hidden;
+
+    font-family:
+        Inter,
+        Arial,
+        Helvetica,
+        sans-serif;
+
+    color: #ffffff;
+
+    background: #03070b;
+}
+
+
+/* =========================================================
+   MAP
+========================================================= */
+
+#map {
+
+    position: fixed;
+
+    inset: 0;
+
+    width: 100vw;
+    height: 100vh;
+
+    z-index: 1;
+
+    background: #03070b;
+}
+
+
+/* =========================================================
+   DARK OPENSTREETMAP
+========================================================= */
+
+.leaflet-tile-pane {
+
+    filter:
+        invert(100%)
+        hue-rotate(180deg)
+        brightness(58%)
+        contrast(120%)
+        saturate(65%);
+}
+
+
+/* =========================================================
+   COMMAND PANEL
+========================================================= */
+
+.command-panel {
+
+    position: fixed;
+
+    top: 16px;
+    bottom: 16px;
+    left: 16px;
+
+    width: 350px;
+
+    z-index: 1000;
+
+    padding: 18px;
+
+    overflow-y: auto;
+
+    border:
+        1px solid
+        rgba(
+            255,
+            255,
+            255,
+            0.08
+        );
+
+    border-radius: 16px;
+
+    background:
+        rgba(
+            3,
+            8,
+            13,
+            0.93
+        );
+
+    backdrop-filter:
+        blur(14px);
+
+    box-shadow:
+        0 20px 60px
+        rgba(
+            0,
+            0,
+            0,
+            0.55
+        );
+}
+
+
+/* =========================================================
+   BRAND
+========================================================= */
+
+.brand-row {
+
+    display: flex;
+
+    align-items: flex-start;
+
+    justify-content: space-between;
+
+    gap: 12px;
+
+    margin-bottom: 20px;
+}
+
+
+.eyebrow {
+
+    margin-bottom: 5px;
+
+    color: #668096;
+
+    font-size: 10px;
+
+    font-weight: 800;
+
+    letter-spacing: 1.8px;
+}
+
+
+.brand-row h1 {
+
+    margin: 0;
+
+    font-size: 20px;
+
+    line-height: 1.25;
+}
+
+
+.status-column {
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: flex-end;
+
+    gap: 6px;
+}
+
+
+/* =========================================================
+   STATUS
+========================================================= */
+
+.status-badge {
+
+    padding: 6px 8px;
+
+    border-radius: 999px;
+
+    font-size: 9px;
+
+    font-weight: 800;
+
+    letter-spacing: 1px;
+}
+
+
+.status-badge.online {
+
+    color: #5effa5;
+
+    border:
+        1px solid
+        rgba(
+            94,
+            255,
+            165,
+            0.3
+        );
+
+    background:
+        rgba(
+            94,
+            255,
+            165,
+            0.08
+        );
+}
+
+
+.live-source {
+
+    display: inline-block;
+
+    padding: 4px 6px;
+
+    border-radius: 999px;
+
+    color: #5effa5;
+
+    background:
+        rgba(
+            94,
+            255,
+            165,
+            0.08
+        );
+
+    border:
+        1px solid
+        rgba(
+            94,
+            255,
+            165,
+            0.18
+        );
+
+    font-size: 8px;
+
+    font-weight: 800;
+
+    letter-spacing: 0.7px;
+}
+
+
+.live-source.stale {
+
+    color: #ffc845;
+
+    border-color:
+        rgba(
+            255,
+            200,
+            69,
+            0.22
+        );
+
+    background:
+        rgba(
+            255,
+            200,
+            69,
+            0.08
+        );
+}
+
+
+/* =========================================================
+   CONTROLS
+========================================================= */
+
+.control-section {
+
+    margin-bottom: 12px;
+}
+
+
+.control-section label {
+
+    display: block;
+
+    margin-bottom: 6px;
+
+    color: #7d94a7;
+
+    font-size: 9px;
+
+    font-weight: 800;
+
+    letter-spacing: 0.9px;
+}
+
+
+.control-section input,
+.control-section select {
+
+    width: 100%;
+
+    padding: 10px 12px;
+
+    color: #edf4f8;
+
+    border:
+        1px solid
+        rgba(
+            255,
+            255,
+            255,
+            0.09
+        );
+
+    border-radius: 8px;
+
+    outline: none;
+
+    background: #0b131b;
+}
+
+
+.control-section input::placeholder {
+
+    color: #5e7284;
+}
+
+
+.control-section input:focus,
+.control-section select:focus {
+
+    border-color: #25c7ff;
+
+    box-shadow:
+        0 0 0 2px
+        rgba(
+            37,
+            199,
+            255,
+            0.08
+        );
+}
+
+
+.control-section select option {
+
+    color: white;
+
+    background: #0b131b;
+}
+
+
+/* =========================================================
+   KPI GRID
+========================================================= */
+
+.kpi-grid {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            2,
+            1fr
+        );
+
+    gap: 9px;
+
+    margin-top: 18px;
+}
+
+
+.kpi-card {
+
+    min-height: 82px;
+
+    padding: 12px;
+
+    border:
+        1px solid
+        rgba(
+            255,
+            255,
+            255,
+            0.07
+        );
+
+    border-radius: 10px;
+
+    background:
+        rgba(
+            255,
+            255,
+            255,
+            0.025
+        );
+}
+
+
+.kpi-card span {
+
+    display: block;
+
+    margin-bottom: 7px;
+
+    color: #70889a;
+
+    font-size: 9px;
+}
+
+
+.kpi-card strong {
+
+    color: #edf5f9;
+
+    font-size: 24px;
+}
+
+
+.earthquake-card strong {
+
+    color: #25c7ff;
+}
+
+
+.affected-card strong {
+
+    color: #ffc845;
+}
+
+
+.risk-card strong {
+
+    color: #ff843d;
+}
+
+
+.critical-card strong {
+
+    color: #ff4057;
+}
+
+
+.feed-value {
+
+    color: #5effa5
+    !important;
+
+    font-size: 16px
+    !important;
+}
+
+
+/* =========================================================
+   SECTIONS
+========================================================= */
+
+.panel-section {
+
+    margin-top: 19px;
+
+    padding-top: 15px;
+
+    border-top:
+        1px solid
+        rgba(
+            255,
+            255,
+            255,
+            0.07
+        );
+}
+
+
+.section-title {
+
+    margin-bottom: 10px;
+
+    color: #657d90;
+
+    font-size: 9px;
+
+    font-weight: 800;
+
+    letter-spacing: 1.4px;
+}
+
+
+.section-title-row {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+}
+
+
+/* =========================================================
+   TYPE STATS
+========================================================= */
+
+.type-stat {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    min-height: 28px;
+
+    border-bottom:
+        1px solid
+        rgba(
+            255,
+            255,
+            255,
+            0.035
+        );
+}
+
+
+.type-stat-name {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 7px;
+
+    color: #bdcbd5;
+
+    font-size: 11px;
+}
+
+
+.type-stat-count {
+
+    color: white;
+
+    font-size: 11px;
+
+    font-weight: 700;
+}
+
+
+.type-color-dot {
+
+    width: 7px;
+    height: 7px;
+
+    border-radius: 50%;
+}
+
+
+/* =========================================================
+   LIVE FEED
+========================================================= */
+
+.event-feed {
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 8px;
+}
+
+
+.event-card,
+.risk-item {
+
+    padding: 10px;
+
+    cursor: pointer;
+
+    border:
+        1px solid
+        rgba(
+            255,
+            255,
+            255,
+            0.06
+        );
+
+    border-radius: 8px;
+
+    background:
+        rgba(
+            255,
+            255,
+            255,
+            0.025
+        );
+
+    transition:
+        0.2s ease;
+}
+
+
+.event-card:hover,
+.risk-item:hover {
+
+    transform:
+        translateX(
+            2px
+        );
+
+    background:
+        rgba(
+            255,
+            255,
+            255,
+            0.045
+        );
+}
+
+
+.event-header {
+
+    display: flex;
+
+    align-items: flex-start;
+
+    justify-content:
+        space-between;
+
+    gap: 10px;
+}
+
+
+.event-title {
+
+    color: #e8f1f6;
+
+    font-size: 10px;
+
+    font-weight: 700;
+
+    line-height: 1.35;
+}
+
+
+.event-type {
+
+    margin-top: 5px;
+
+    color: #8298a8;
+
+    font-size: 9px;
+}
+
+
+.event-description {
+
+    margin-top: 5px;
+
+    color: #60798c;
+
+    font-size: 9px;
+
+    line-height: 1.4;
+}
+
+
+/* =========================================================
+   FEED DOTS
+========================================================= */
+
+.live-dot {
+
+    width: 7px;
+    height: 7px;
+
+    margin-bottom: 10px;
+
+    border-radius: 50%;
+
+    background: #5cff9f;
+
+    box-shadow:
+        0 0 12px
+        #5cff9f;
+}
+
+
+.warning-dot {
+
+    width: 7px;
+    height: 7px;
+
+    margin-bottom: 10px;
+
+    border-radius: 50%;
+
+    background: #ff843d;
+
+    box-shadow:
+        0 0 12px
+        #ff843d;
+}
+
+
+/* =========================================================
+   SEVERITY
+========================================================= */
+
+.severity {
+
+    flex-shrink: 0;
+
+    padding: 4px 6px;
+
+    border-radius: 999px;
+
+    font-size: 7px;
+
+    font-weight: 800;
+
+    text-transform:
+        uppercase;
+}
+
+
+.severity.low {
+
+    color: #5effa5;
+
+    background:
+        rgba(
+            94,
+            255,
+            165,
+            0.08
+        );
+}
+
+
+.severity.medium {
+
+    color: #ffd25b;
+
+    background:
+        rgba(
+            255,
+            210,
+            91,
+            0.08
+        );
+}
+
+
+.severity.high {
+
+    color: #ff8a42;
+
+    background:
+        rgba(
+            255,
+            138,
+            66,
+            0.09
+        );
+}
+
+
+.severity.critical {
+
+    color: #ff5365;
+
+    background:
+        rgba(
+            255,
+            83,
+            101,
+            0.11
+        );
+}
+
+
+/* =========================================================
+   EMPTY STATE
+========================================================= */
+
+.empty-state {
+
+    padding: 12px;
+
+    color: #8298a8;
+
+    border:
+        1px dashed
+        rgba(
+            255,
+            255,
+            255,
+            0.08
+        );
+
+    border-radius: 8px;
+
+    font-size: 9px;
+
+    line-height: 1.5;
+}
+
+
+/* =========================================================
+   LEGEND
+========================================================= */
+
+.map-legend {
+
+    position: fixed;
+
+    left: 385px;
+
+    bottom: 18px;
+
+    z-index: 900;
+
+    padding: 12px 14px;
+
+    color: white;
+
+    border:
+        1px solid
+        rgba(
+            255,
+            255,
+            255,
+            0.07
+        );
+
+    border-radius: 10px;
+
+    background:
+        rgba(
+            3,
+            8,
+            13,
+            0.88
+        );
+
+    backdrop-filter:
+        blur(12px);
+
+    box-shadow:
+        0 10px 30px
+        rgba(
+            0,
+            0,
+            0,
+            0.45
+        );
+}
+
+
+.legend-title {
+
+    margin-bottom: 7px;
+
+    color: #6c8395;
+
+    font-size: 8px;
+
+    font-weight: 800;
+
+    letter-spacing: 1.1px;
+}
+
+
+.risk-legend-title,
+.earthquake-legend-title {
+
+    margin-top: 10px;
+}
+
+
+.legend-row {
+
+    display: flex;
+
+    flex-wrap: wrap;
+
+    gap: 10px;
+}
+
+
+.legend-row span {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    color: #b5c4ce;
+
+    font-size: 9px;
+}
+
+
+.legend-dot {
+
+    display: inline-block;
+
+    width: 7px;
+    height: 7px;
+
+    margin-right: 5px;
+
+    border-radius: 50%;
+}
+
+
+/* =========================================================
+   COLORS
+========================================================= */
+
+.cloud {
+    background: #25c7ff;
+}
+
+
+.education {
+    background: #43df8c;
+}
+
+
+.healthcare {
+    background: #ff5468;
+}
+
+
+.transport {
+    background: #ffc845;
+}
+
+
+.telecom {
+    background: #c06cff;
+}
+
+
+.risk-medium {
+    background: #ffc845;
+}
+
+
+.risk-high {
+    background: #ff843d;
+}
+
+
+.risk-critical {
+    background: #ff4057;
+}
+
+
+.quake {
+
+    background: #ff4057;
+
+    box-shadow:
+        0 0 8px
+        #ff4057;
+}
+
+
+/* =========================================================
+   CUSTOM CLUSTERS
+========================================================= */
+
+.custom-cluster {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    border-radius: 50%;
+
+    color: white;
+
+    font-size: 12px;
+
+    font-weight: 800;
+
+    border:
+        2px solid
+        rgba(
+            255,
+            255,
+            255,
+            0.65
+        );
+}
+
+
+.cluster-low {
+
+    background:
+        rgba(
+            37,
+            199,
+            255,
+            0.88
+        );
+
+    box-shadow:
+        0 0 18px
+        rgba(
+            37,
+            199,
+            255,
+            0.65
+        );
+}
+
+
+.cluster-medium {
+
+    background:
+        rgba(
+            255,
+            192,
+            68,
+            0.92
+        );
+
+    box-shadow:
+        0 0 20px
+        rgba(
+            255,
+            192,
+            68,
+            0.7
+        );
+}
+
+
+.cluster-high {
+
+    background:
+        rgba(
+            255,
+            75,
+            92,
+            0.92
+        );
+
+    box-shadow:
+        0 0 24px
+        rgba(
+            255,
+            75,
+            92,
+            0.75
+        );
+}
+
+
+/* =========================================================
+   POPUPS
+========================================================= */
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+
+    color: #eaf2f7;
+
+    background: #0b131b;
+}
+
+
+.leaflet-popup-content-wrapper {
+
+    border:
+        1px solid
+        rgba(
+            255,
+            255,
+            255,
+            0.08
+        );
+
+    border-radius: 10px;
+}
+
+
+.leaflet-popup-content {
+
+    margin: 14px;
+
+    font-size: 11px;
+
+    line-height: 1.5;
+}
+
+
+.quake-popup h3 {
+
+    margin:
+        7px 0 3px;
+
+    color: #ff5365;
+
+    font-size: 22px;
+}
+
+
+/* =========================================================
+   ZOOM CONTROLS
+========================================================= */
+
+.leaflet-control-zoom {
+
+    border: 0
+    !important;
+
+    box-shadow:
+        0 8px 30px
+        rgba(
+            0,
+            0,
+            0,
+            0.5
+        )
+        !important;
+}
+
+
+.leaflet-control-zoom a {
+
+    color: white
+    !important;
+
+    border:
+        1px solid
+        rgba(
+            255,
+            255,
+            255,
+            0.08
+        )
+        !important;
+
+    background:
+        rgba(
+            3,
+            8,
+            13,
+            0.92
+        )
+        !important;
+}
+
+
+/* =========================================================
+   ATTRIBUTION
+========================================================= */
+
+.leaflet-control-attribution {
+
+    color: #7b8f9e
+    !important;
+
+    background:
+        rgba(
+            3,
+            8,
+            13,
+            0.78
+        )
+        !important;
+}
+
+
+.leaflet-control-attribution a {
+
+    color: #25c7ff
+    !important;
+}
+
+
+/* =========================================================
+   DON'T FILTER OVERLAYS
+========================================================= */
+
+.leaflet-overlay-pane,
+.leaflet-marker-pane,
+.leaflet-tooltip-pane,
+.leaflet-popup-pane,
+.leaflet-control-container {
+
+    filter: none;
+}
+
+
+/* =========================================================
+   SCROLLBAR
+========================================================= */
+
+.command-panel::-webkit-scrollbar {
+
+    width: 5px;
+}
+
+
+.command-panel::-webkit-scrollbar-thumb {
+
+    border-radius: 20px;
+
+    background: #263a49;
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media
+(max-width: 800px) {
+
+    .command-panel {
+
+        top: 10px;
+        bottom: 10px;
+        left: 10px;
+
+        width: 290px;
+    }
+
+
+    .map-legend {
+
+        display: none;
+    }
+
+
+    .brand-row h1 {
+
+        font-size: 17px;
+    }
+
+
+    .kpi-card strong {
+
+        font-size: 21px;
+    }
+
+}
