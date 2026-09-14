@@ -433,6 +433,126 @@
 
     </section>
 
+
+    <!-- =================================================
+         PHASE 6.6 PERSISTED ALERT LIFECYCLE
+    ================================================== -->
+
+    <section class="panel-section persisted-alert-section">
+
+        <div class="section-title-row">
+
+            <div class="section-title">
+                PHASE 6.6 ALERT LIFECYCLE
+            </div>
+
+            <div
+                id="persistedAlertStatus"
+                class="persisted-alert-status loading"
+            >
+                LOADING
+            </div>
+
+        </div>
+
+        <div class="persisted-alert-summary">
+
+            <div class="persisted-alert-kpi active">
+                <span>Active</span>
+                <strong id="persistedAlertActive">0</strong>
+            </div>
+
+            <div class="persisted-alert-kpi acknowledged">
+                <span>Ack</span>
+                <strong id="persistedAlertAcknowledged">0</strong>
+            </div>
+
+            <div class="persisted-alert-kpi resolved">
+                <span>Resolved</span>
+                <strong id="persistedAlertResolved">0</strong>
+            </div>
+
+        </div>
+
+        <div class="persisted-alert-controls">
+
+            <div class="persisted-alert-control">
+
+                <label for="persistedAlertStatusFilter">
+                    STATUS
+                </label>
+
+                <select id="persistedAlertStatusFilter">
+                    <option value="all">All states</option>
+                    <option value="active">Active</option>
+                    <option value="acknowledged">Acknowledged</option>
+                    <option value="resolved">Resolved</option>
+                </select>
+
+            </div>
+
+            <div class="persisted-alert-control">
+
+                <label for="persistedAlertSeverityFilter">
+                    SEVERITY
+                </label>
+
+                <select id="persistedAlertSeverityFilter">
+                    <option value="all">All severities</option>
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                </select>
+
+            </div>
+
+        </div>
+
+        <div class="persisted-alert-operator-row">
+
+            <label for="persistedAlertOperator">
+                OPERATOR
+            </label>
+
+            <input
+                id="persistedAlertOperator"
+                type="text"
+                maxlength="100"
+                value="operator"
+                autocomplete="off"
+            />
+
+        </div>
+
+        <div class="persisted-alert-toolbar">
+
+            <button
+                id="refreshPersistedAlerts"
+                class="persisted-alert-refresh"
+                type="button"
+            >
+                Refresh
+            </button>
+
+            <span id="persistedAlertMeta">
+                Waiting for persisted alerts...
+            </span>
+
+        </div>
+
+        <div
+            id="persistedAlertFeed"
+            class="persisted-alert-feed"
+        >
+            <div class="empty-state">
+                Loading PostgreSQL alert history...
+            </div>
+        </div>
+
+    </section>
+
+
     <!-- =================================================
          PHASE 6.4 TELEMETRY HISTORY
     ================================================== -->
@@ -876,6 +996,69 @@
             <i class="legend-dot test-quake"></i>
             TEST
         </span>
+
+    </div>
+
+</div>
+
+
+
+<div
+    id="alertHistoryModal"
+    class="alert-history-modal"
+    aria-hidden="true"
+>
+
+    <div
+        class="alert-history-backdrop"
+        data-close-alert-history="true"
+    ></div>
+
+    <div
+        class="alert-history-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="alertHistoryTitle"
+    >
+
+        <div class="alert-history-header">
+
+            <div>
+
+                <div class="alert-history-eyebrow">
+                    PHASE 6.6 AUDIT TRAIL
+                </div>
+
+                <h2 id="alertHistoryTitle">
+                    Alert History
+                </h2>
+
+            </div>
+
+            <button
+                id="closeAlertHistory"
+                class="alert-history-close"
+                type="button"
+                aria-label="Close alert history"
+            >
+                ×
+            </button>
+
+        </div>
+
+        <div
+            id="alertHistorySummary"
+            class="alert-history-summary"
+        ></div>
+
+        <div
+            id="alertHistoryTimeline"
+            class="alert-history-timeline"
+        >
+            <div class="empty-state">
+                Loading alert history...
+            </div>
+        </div>
 
     </div>
 

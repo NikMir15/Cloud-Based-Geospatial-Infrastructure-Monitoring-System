@@ -1,7 +1,7 @@
 /* =========================================================
    INFRASTRUCTURE SITUATIONAL AWARENESS PLATFORM
 
-   Phase 6.4 Frontend
+   Phase 6.6 Frontend
 
    - Live USGS earthquake visualization
    - Project-local simulated sensor telemetry
@@ -9,6 +9,7 @@
    - Phase 6.1 local test earthquake
    - REST + WebSockets
    - Persistent telemetry history + live SVG charts
+   - Persistent telemetry alert lifecycle + audit history
 ========================================================= */
 
 
@@ -99,6 +100,15 @@ let telemetryAlertSummary = {
 };
 
 let telemetryAlertWindowMinutes = 5;
+
+
+let persistedTelemetryAlerts = [];
+
+let persistedAlertLastUpdatedAt = null;
+
+let selectedPersistedAlertId = null;
+
+let persistedAlertRequestInFlight = false;
 
 
 /* =========================================================
@@ -3656,6 +3666,8 @@ function connectTelemetryAlertSocket() {
 
                 renderTelemetryAlerts();
 
+                loadPersistedTelemetryAlerts();
+
                 setTelemetryAlertStatus(
                     "live",
                     "LIVE"
@@ -3702,6 +3714,1113 @@ function connectTelemetryAlertSocket() {
                 5000
             );
         };
+}
+
+
+/* =========================================================
+   PHASE 6.6
+   PERSISTED TELEMETRY ALERT LIFECYCLE
+========================================================= */
+
+function setPersistedAlertStatus(
+    state,
+    text
+) {
+
+    const element =
+        document.getElementById(
+            "persistedAlertStatus"
+        );
+
+    if (!element) {
+        return;
+    }
+
+    element.className =
+        `persisted-alert-status ${state}`;
+
+    element.textContent =
+        text;
+}
+
+
+function getPersistedAlertOperator() {
+
+    const input =
+        document.getElementById(
+            "persistedAlertOperator"
+        );
+
+    const value =
+        input
+            ? input.value.trim()
+            : "";
+
+    return value || "operator";
+}
+
+
+function formatAlertTimestamp(
+    value
+) {
+
+    if (!value) {
+        return "—";
+    }
+
+    const date =
+        new Date(
+            value
+        );
+
+    if (
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
+        return String(value);
+    }
+
+    return date.toLocaleString();
+}
+
+
+function calculatePersistedAlertCounts() {
+
+    return persistedTelemetryAlerts.reduce(
+        (
+            summary,
+            alert
+        ) => {
+
+            const status =
+                String(
+                    alert.status
+                    || "active"
+                );
+
+            if (
+                Object.prototype.hasOwnProperty.call(
+                    summary,
+                    status
+                )
+            ) {
+
+                summary[
+                    status
+                ] += 1;
+            }
+
+            return summary;
+        },
+        {
+            active: 0,
+            acknowledged: 0,
+            resolved: 0
+        }
+    );
+}
+
+
+function updatePersistedAlertSummary() {
+
+    const summary =
+        calculatePersistedAlertCounts();
+
+    setTextIfExists(
+        "persistedAlertActive",
+        summary.active
+    );
+
+    setTextIfExists(
+        "persistedAlertAcknowledged",
+        summary.acknowledged
+    );
+
+    setTextIfExists(
+        "persistedAlertResolved",
+        summary.resolved
+    );
+
+    const meta =
+        document.getElementById(
+            "persistedAlertMeta"
+        );
+
+    if (meta) {
+
+        const lastUpdated =
+            persistedAlertLastUpdatedAt
+                ? persistedAlertLastUpdatedAt.toLocaleTimeString()
+                : "—";
+
+        meta.textContent =
+            `${persistedTelemetryAlerts.length} persisted · `
+            +
+            `updated ${lastUpdated}`;
+    }
+}
+
+
+function persistedAlertStatusLabel(
+    status
+) {
+
+    const value =
+        String(
+            status
+            || "active"
+        ).toLowerCase();
+
+    if (
+        value
+        === "acknowledged"
+    ) {
+
+        return "ACKNOWLEDGED";
+    }
+
+    if (
+        value
+        === "resolved"
+    ) {
+
+        return "RESOLVED";
+    }
+
+    return "ACTIVE";
+}
+
+
+function renderPersistedAlerts() {
+
+    const container =
+        document.getElementById(
+            "persistedAlertFeed"
+        );
+
+    if (!container) {
+        return;
+    }
+
+    const statusSelect =
+        document.getElementById(
+            "persistedAlertStatusFilter"
+        );
+
+    const severitySelect =
+        document.getElementById(
+            "persistedAlertSeverityFilter"
+        );
+
+    const selectedStatus =
+        statusSelect
+            ? statusSelect.value
+            : "all";
+
+    const selectedSeverity =
+        severitySelect
+            ? severitySelect.value
+            : "all";
+
+    const alerts =
+        persistedTelemetryAlerts.filter(
+            alert => {
+
+                const matchesStatus =
+                    selectedStatus === "all"
+                    ||
+                    alert.status === selectedStatus;
+
+                const matchesSeverity =
+                    selectedSeverity === "all"
+                    ||
+                    alert.severity === selectedSeverity;
+
+                return (
+                    matchesStatus
+                    &&
+                    matchesSeverity
+                );
+            }
+        );
+
+    if (
+        alerts.length === 0
+    ) {
+
+        container.innerHTML = `
+            <div class="empty-state">
+                No persisted alerts match the selected filters.
+            </div>
+        `;
+
+        return;
+    }
+
+    container.innerHTML =
+        alerts
+            .slice(
+                0,
+                100
+            )
+            .map(
+                alert => {
+
+                    const id =
+                        Number(
+                            alert.id
+                        );
+
+                    const assetId =
+                        Number(
+                            alert.asset_id
+                        );
+
+                    const severity =
+                        escapeHtml(
+                            alert.severity
+                            || "low"
+                        );
+
+                    const status =
+                        escapeHtml(
+                            alert.status
+                            || "active"
+                        );
+
+                    const canAcknowledge =
+                        status === "active";
+
+                    const canResolve =
+                        (
+                            status === "active"
+                            ||
+                            status === "acknowledged"
+                        );
+
+                    const latestValue =
+                        formatTelemetryAlertValue(
+                            alert.latest_value,
+                            alert.unit
+                        );
+
+                    return `
+                        <article
+                            class="
+                                persisted-alert-card
+                                severity-${severity}
+                                status-${status}
+                            "
+                            data-alert-id="${id}"
+                        >
+
+                            <div class="persisted-alert-card-header">
+
+                                <button
+                                    type="button"
+                                    class="persisted-alert-asset"
+                                    data-focus-asset="${assetId}"
+                                >
+                                    ${escapeHtml(
+                                        String(
+                                            alert.asset_name
+                                            || `Asset ${assetId}`
+                                        )
+                                    )}
+                                </button>
+
+                                <div class="persisted-alert-badges">
+
+                                    <span
+                                        class="
+                                            persisted-alert-badge
+                                            severity-${severity}
+                                        "
+                                    >
+                                        ${severity.toUpperCase()}
+                                    </span>
+
+                                    <span
+                                        class="
+                                            persisted-alert-badge
+                                            state-${status}
+                                        "
+                                    >
+                                        ${persistedAlertStatusLabel(
+                                            status
+                                        )}
+                                    </span>
+
+                                </div>
+
+                            </div>
+
+                            <div class="persisted-alert-message">
+                                ${escapeHtml(
+                                    alert.message
+                                    || "Telemetry alert"
+                                )}
+                            </div>
+
+                            <div class="persisted-alert-metric">
+
+                                <span>
+                                    ${escapeHtml(
+                                        alert.metric_label
+                                        || alert.metric
+                                        || "Metric"
+                                    )}
+                                </span>
+
+                                <strong>
+                                    ${latestValue}
+                                </strong>
+
+                            </div>
+
+                            <div class="persisted-alert-times">
+
+                                <span>
+                                    First:
+                                    ${escapeHtml(
+                                        formatAlertTimestamp(
+                                            alert.first_seen_at
+                                        )
+                                    )}
+                                </span>
+
+                                <span>
+                                    Last:
+                                    ${escapeHtml(
+                                        formatAlertTimestamp(
+                                            alert.last_seen_at
+                                        )
+                                    )}
+                                </span>
+
+                                ${
+                                    alert.acknowledged_at
+                                        ? `
+                                            <span>
+                                                Ack:
+                                                ${escapeHtml(
+                                                    formatAlertTimestamp(
+                                                        alert.acknowledged_at
+                                                    )
+                                                )}
+                                                ${
+                                                    alert.acknowledged_by
+                                                        ? ` · ${escapeHtml(alert.acknowledged_by)}`
+                                                        : ""
+                                                }
+                                            </span>
+                                        `
+                                        : ""
+                                }
+
+                                ${
+                                    alert.resolved_at
+                                        ? `
+                                            <span>
+                                                Resolved:
+                                                ${escapeHtml(
+                                                    formatAlertTimestamp(
+                                                        alert.resolved_at
+                                                    )
+                                                )}
+                                                ${
+                                                    alert.resolved_by
+                                                        ? ` · ${escapeHtml(alert.resolved_by)}`
+                                                        : ""
+                                                }
+                                            </span>
+                                        `
+                                        : ""
+                                }
+
+                            </div>
+
+                            ${
+                                alert.resolution_note
+                                    ? `
+                                        <div class="persisted-alert-note">
+                                            ${escapeHtml(
+                                                alert.resolution_note
+                                            )}
+                                        </div>
+                                    `
+                                    : ""
+                            }
+
+                            <div class="persisted-alert-actions">
+
+                                <button
+                                    type="button"
+                                    class="persisted-alert-action history"
+                                    data-alert-action="history"
+                                    data-alert-id="${id}"
+                                >
+                                    History
+                                </button>
+
+                                <button
+                                    type="button"
+                                    class="persisted-alert-action acknowledge"
+                                    data-alert-action="acknowledge"
+                                    data-alert-id="${id}"
+                                    ${canAcknowledge ? "" : "disabled"}
+                                >
+                                    Acknowledge
+                                </button>
+
+                                <button
+                                    type="button"
+                                    class="persisted-alert-action resolve"
+                                    data-alert-action="resolve"
+                                    data-alert-id="${id}"
+                                    ${canResolve ? "" : "disabled"}
+                                >
+                                    Resolve
+                                </button>
+
+                            </div>
+
+                        </article>
+                    `;
+                }
+            )
+            .join("");
+}
+
+
+async function loadPersistedTelemetryAlerts() {
+
+    if (
+        persistedAlertRequestInFlight
+    ) {
+        return;
+    }
+
+    persistedAlertRequestInFlight =
+        true;
+
+    setPersistedAlertStatus(
+        "loading",
+        "LOADING"
+    );
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_URL}/telemetry-alert-history?limit=1000`
+            );
+
+        if (!response.ok) {
+
+            throw new Error(
+                `Persisted alert request failed (${response.status})`
+            );
+        }
+
+        const payload =
+            await response.json();
+
+        if (
+            payload.source
+            !== "LOCAL_PROJECT"
+            ||
+            payload.external
+            !== false
+        ) {
+
+            throw new Error(
+                "Unexpected persisted alert source"
+            );
+        }
+
+        persistedTelemetryAlerts =
+            Array.isArray(
+                payload.alerts
+            )
+                ? payload.alerts
+                : [];
+
+        persistedAlertLastUpdatedAt =
+            new Date();
+
+        updatePersistedAlertSummary();
+
+        renderPersistedAlerts();
+
+        setPersistedAlertStatus(
+            "ready",
+            "READY"
+        );
+    }
+
+    catch (error) {
+
+        console.error(
+            "Persisted telemetry alert load error:",
+            error
+        );
+
+        setPersistedAlertStatus(
+            "error",
+            "ERROR"
+        );
+
+        const container =
+            document.getElementById(
+                "persistedAlertFeed"
+            );
+
+        if (container) {
+
+            container.innerHTML = `
+                <div class="empty-state error-state">
+                    Unable to load persisted alerts.
+                </div>
+            `;
+        }
+    }
+
+    finally {
+
+        persistedAlertRequestInFlight =
+            false;
+    }
+}
+
+
+async function postPersistedAlertAction(
+    alertId,
+    action
+) {
+
+    const alert =
+        persistedTelemetryAlerts.find(
+            item =>
+                Number(
+                    item.id
+                )
+                ===
+                Number(
+                    alertId
+                )
+        );
+
+    if (!alert) {
+        return;
+    }
+
+    const operator =
+        getPersistedAlertOperator();
+
+    let note =
+        null;
+
+    if (
+        action === "acknowledge"
+    ) {
+
+        note =
+            window.prompt(
+                "Acknowledgement note (optional):",
+                "Investigating telemetry alert"
+            );
+
+        if (
+            note === null
+        ) {
+            return;
+        }
+    }
+
+    else if (
+        action === "resolve"
+    ) {
+
+        note =
+            window.prompt(
+                "Resolution note:",
+                "Issue investigated and resolved"
+            );
+
+        if (
+            note === null
+        ) {
+            return;
+        }
+    }
+
+    const endpoint =
+        action === "acknowledge"
+            ? "acknowledge"
+            : "resolve";
+
+    setPersistedAlertStatus(
+        "loading",
+        "UPDATING"
+    );
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_URL}/telemetry-alerts/${Number(alertId)}/${endpoint}`,
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify(
+                        {
+                            changed_by:
+                                operator,
+
+                            note:
+                                note
+                                ? note.trim()
+                                : null
+                        }
+                    )
+                }
+            );
+
+        const payload =
+            await response.json()
+                .catch(
+                    () => ({})
+                );
+
+        if (!response.ok) {
+
+            throw new Error(
+                payload.detail
+                ||
+                `Alert ${endpoint} failed (${response.status})`
+            );
+        }
+
+        await loadPersistedTelemetryAlerts();
+
+        if (
+            selectedPersistedAlertId
+            ===
+            Number(
+                alertId
+            )
+        ) {
+
+            await openAlertHistory(
+                alertId
+            );
+        }
+    }
+
+    catch (error) {
+
+        console.error(
+            `Persisted alert ${endpoint} error:`,
+            error
+        );
+
+        setPersistedAlertStatus(
+            "error",
+            "ERROR"
+        );
+
+        window.alert(
+            error.message
+            ||
+            `Unable to ${endpoint} alert.`
+        );
+    }
+}
+
+
+function closeAlertHistory() {
+
+    const modal =
+        document.getElementById(
+            "alertHistoryModal"
+        );
+
+    if (!modal) {
+        return;
+    }
+
+    modal.classList.remove(
+        "open"
+    );
+
+    modal.setAttribute(
+        "aria-hidden",
+        "true"
+    );
+
+    selectedPersistedAlertId =
+        null;
+}
+
+
+function renderAlertHistoryTimeline(
+    alert,
+    history
+) {
+
+    const summary =
+        document.getElementById(
+            "alertHistorySummary"
+        );
+
+    const timeline =
+        document.getElementById(
+            "alertHistoryTimeline"
+        );
+
+    if (
+        !summary
+        ||
+        !timeline
+    ) {
+
+        return;
+    }
+
+    const severity =
+        escapeHtml(
+            alert.severity
+            || "low"
+        );
+
+    const status =
+        escapeHtml(
+            alert.status
+            || "active"
+        );
+
+    summary.innerHTML = `
+        <div class="alert-history-summary-title">
+
+            <strong>
+                ${escapeHtml(
+                    alert.asset_name
+                    || `Asset ${alert.asset_id}`
+                )}
+            </strong>
+
+            <span
+                class="
+                    persisted-alert-badge
+                    severity-${severity}
+                "
+            >
+                ${severity.toUpperCase()}
+            </span>
+
+            <span
+                class="
+                    persisted-alert-badge
+                    state-${status}
+                "
+            >
+                ${persistedAlertStatusLabel(status)}
+            </span>
+
+        </div>
+
+        <div class="alert-history-summary-message">
+            ${escapeHtml(
+                alert.message
+                || "Telemetry alert"
+            )}
+        </div>
+
+        <div class="alert-history-summary-meta">
+            Alert #${Number(alert.id)}
+            · Asset #${Number(alert.asset_id)}
+            · ${escapeHtml(alert.alert_kind || "threshold")}
+        </div>
+    `;
+
+    if (
+        !Array.isArray(history)
+        ||
+        history.length === 0
+    ) {
+
+        timeline.innerHTML = `
+            <div class="empty-state">
+                No lifecycle events have been recorded for this alert.
+            </div>
+        `;
+
+        return;
+    }
+
+    timeline.innerHTML =
+        history
+            .map(
+                event => {
+
+                    const action =
+                        escapeHtml(
+                            event.action
+                            || "EVENT"
+                        );
+
+                    const fromStatus =
+                        event.from_status
+                            ? escapeHtml(
+                                event.from_status
+                            )
+                            : "—";
+
+                    const toStatus =
+                        event.to_status
+                            ? escapeHtml(
+                                event.to_status
+                            )
+                            : "—";
+
+                    return `
+                        <div class="alert-history-event">
+
+                            <div class="alert-history-event-dot"></div>
+
+                            <div class="alert-history-event-body">
+
+                                <div class="alert-history-event-header">
+
+                                    <strong>
+                                        ${action.replaceAll("_", " ")}
+                                    </strong>
+
+                                    <span>
+                                        ${escapeHtml(
+                                            formatAlertTimestamp(
+                                                event.changed_at
+                                            )
+                                        )}
+                                    </span>
+
+                                </div>
+
+                                <div class="alert-history-transition">
+                                    ${fromStatus}
+                                    <span>→</span>
+                                    ${toStatus}
+                                </div>
+
+                                ${
+                                    event.note
+                                        ? `
+                                            <div class="alert-history-event-note">
+                                                ${escapeHtml(event.note)}
+                                            </div>
+                                        `
+                                        : ""
+                                }
+
+                                <div class="alert-history-event-meta">
+                                    ${escapeHtml(event.changed_by || "SYSTEM")}
+                                    ·
+                                    ${escapeHtml(event.severity || alert.severity || "low")}
+                                </div>
+
+                            </div>
+
+                        </div>
+                    `;
+                }
+            )
+            .join("");
+}
+
+
+async function openAlertHistory(
+    alertId
+) {
+
+    const id =
+        Number(
+            alertId
+        );
+
+    const alert =
+        persistedTelemetryAlerts.find(
+            item =>
+                Number(
+                    item.id
+                )
+                === id
+        );
+
+    if (!alert) {
+        return;
+    }
+
+    selectedPersistedAlertId =
+        id;
+
+    const modal =
+        document.getElementById(
+            "alertHistoryModal"
+        );
+
+    const timeline =
+        document.getElementById(
+            "alertHistoryTimeline"
+        );
+
+    if (
+        !modal
+        ||
+        !timeline
+    ) {
+
+        return;
+    }
+
+    modal.classList.add(
+        "open"
+    );
+
+    modal.setAttribute(
+        "aria-hidden",
+        "false"
+    );
+
+    timeline.innerHTML = `
+        <div class="empty-state">
+            Loading alert history...
+        </div>
+    `;
+
+    try {
+
+        const response =
+            await fetch(
+                `${API_URL}/telemetry-alert-history/${id}/events`
+            );
+
+        if (!response.ok) {
+
+            throw new Error(
+                `Alert history request failed (${response.status})`
+            );
+        }
+
+        const payload =
+            await response.json();
+
+        if (
+            payload.source
+            !== "LOCAL_PROJECT"
+            ||
+            payload.external
+            !== false
+        ) {
+
+            throw new Error(
+                "Unexpected alert history source"
+            );
+        }
+
+        renderAlertHistoryTimeline(
+            alert,
+            payload.history
+            || []
+        );
+    }
+
+    catch (error) {
+
+        console.error(
+            "Alert history load error:",
+            error
+        );
+
+        timeline.innerHTML = `
+            <div class="empty-state error-state">
+                Unable to load lifecycle history.
+            </div>
+        `;
+    }
+}
+
+
+async function handlePersistedAlertFeedClick(
+    event
+) {
+
+    const focusButton =
+        event.target.closest(
+            "[data-focus-asset]"
+        );
+
+    if (focusButton) {
+
+        focusTelemetryAlertAsset(
+            Number(
+                focusButton.dataset.focusAsset
+            )
+        );
+
+        return;
+    }
+
+    const actionButton =
+        event.target.closest(
+            "[data-alert-action]"
+        );
+
+    if (
+        !actionButton
+        ||
+        actionButton.disabled
+    ) {
+
+        return;
+    }
+
+    const alertId =
+        Number(
+            actionButton.dataset.alertId
+        );
+
+    const action =
+        actionButton.dataset.alertAction;
+
+    if (
+        action === "history"
+    ) {
+
+        await openAlertHistory(
+            alertId
+        );
+
+        return;
+    }
+
+    if (
+        action === "acknowledge"
+        ||
+        action === "resolve"
+    ) {
+
+        await postPersistedAlertAction(
+            alertId,
+            action
+        );
+    }
 }
 
 
@@ -5616,7 +6735,8 @@ async function refreshDashboard() {
             loadAnalytics(),
             loadEarthquakes(),
             loadTestEventStatus(),
-            loadTelemetryAlerts()
+            loadTelemetryAlerts(),
+            loadPersistedTelemetryAlerts()
         ]
     );
 
@@ -5883,6 +7003,42 @@ window.addEventListener(
             );
 
 
+        const persistedAlertStatusFilter =
+            document.getElementById(
+                "persistedAlertStatusFilter"
+            );
+
+
+        const persistedAlertSeverityFilter =
+            document.getElementById(
+                "persistedAlertSeverityFilter"
+            );
+
+
+        const refreshPersistedAlerts =
+            document.getElementById(
+                "refreshPersistedAlerts"
+            );
+
+
+        const persistedAlertFeed =
+            document.getElementById(
+                "persistedAlertFeed"
+            );
+
+
+        const closeAlertHistoryButton =
+            document.getElementById(
+                "closeAlertHistory"
+            );
+
+
+        const alertHistoryModal =
+            document.getElementById(
+                "alertHistoryModal"
+            );
+
+
         if (searchBox) {
 
             searchBox.addEventListener(
@@ -6008,6 +7164,85 @@ window.addEventListener(
                 renderTelemetryAlerts
             );
         }
+
+
+        if (persistedAlertStatusFilter) {
+
+            persistedAlertStatusFilter.addEventListener(
+                "change",
+                renderPersistedAlerts
+            );
+        }
+
+
+        if (persistedAlertSeverityFilter) {
+
+            persistedAlertSeverityFilter.addEventListener(
+                "change",
+                renderPersistedAlerts
+            );
+        }
+
+
+        if (refreshPersistedAlerts) {
+
+            refreshPersistedAlerts.addEventListener(
+                "click",
+                loadPersistedTelemetryAlerts
+            );
+        }
+
+
+        if (persistedAlertFeed) {
+
+            persistedAlertFeed.addEventListener(
+                "click",
+                handlePersistedAlertFeedClick
+            );
+        }
+
+
+        if (closeAlertHistoryButton) {
+
+            closeAlertHistoryButton.addEventListener(
+                "click",
+                closeAlertHistory
+            );
+        }
+
+
+        if (alertHistoryModal) {
+
+            alertHistoryModal.addEventListener(
+                "click",
+                event => {
+
+                    if (
+                        event.target.dataset
+                        &&
+                        event.target.dataset.closeAlertHistory
+                        === "true"
+                    ) {
+
+                        closeAlertHistory();
+                    }
+                }
+            );
+        }
+
+
+        document.addEventListener(
+            "keydown",
+            event => {
+
+                if (
+                    event.key === "Escape"
+                ) {
+
+                    closeAlertHistory();
+                }
+            }
+        );
 
 
         /*
