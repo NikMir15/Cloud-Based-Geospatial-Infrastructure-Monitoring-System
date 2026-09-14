@@ -1,22 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
+    <title>GeoInfra — Infrastructure Monitoring System</title>
 
-    <title>
-        Infrastructure Situational Awareness Platform
-    </title>
-
-    <link
-        rel="icon"
-        href="favicon.ico"
-    >
+    <link rel="icon" href="favicon.ico">
 
     <link
         rel="stylesheet"
@@ -33,982 +23,1022 @@
         href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
     >
 
-    <link
-        rel="stylesheet"
-        href="style.css"
-    >
+    <link rel="stylesheet" href="style.css">
 </head>
-
 
 <body>
 
-<div id="map"></div>
-
-
-<!-- =====================================================
-     COMMAND PANEL
-===================================================== -->
-
-<aside class="command-panel">
-
-
-    <!-- HEADER -->
-
-    <div class="brand-row">
-
-        <div>
-
-            <div class="eyebrow">
-                GEO INTELLIGENCE
-            </div>
-
-            <h1>
-                Infrastructure Monitor
-            </h1>
-
-        </div>
-
-
-        <div class="status-column">
-
-            <div
-                id="systemStatus"
-                class="status-badge online"
-            >
-                ONLINE
-            </div>
-
-            <div
-                id="dataSourceStatus"
-                class="live-source"
-            >
-                USGS LIVE
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <!-- SEARCH -->
-
-    <div class="control-section">
-
-        <label for="searchBox">
-            SEARCH ASSETS
-        </label>
-
-        <input
-            id="searchBox"
-            type="text"
-            placeholder="Search infrastructure..."
-            autocomplete="off"
-        >
-
-    </div>
-
-
-    <!-- INFRA TYPE FILTER -->
-
-    <div class="control-section">
-
-        <label for="typeFilter">
-            INFRASTRUCTURE TYPE
-        </label>
-
-        <select id="typeFilter">
-
-            <option value="all">
-                All Infrastructure
-            </option>
-
-        </select>
-
-    </div>
-
-
-    <!-- RISK FILTER -->
-
-    <div class="control-section">
-
-        <label for="riskFilter">
-            ESTIMATED RISK
-        </label>
-
-        <select id="riskFilter">
-
-            <option value="all">
-                All Risk Levels
-            </option>
-
-            <option value="critical">
-                Critical
-            </option>
-
-            <option value="high">
-                High
-            </option>
-
-            <option value="medium">
-                Medium
-            </option>
-
-            <option value="low">
-                Low
-            </option>
-
-        </select>
-
-    </div>
-
-
-    <!-- KPI GRID -->
-
-    <div class="kpi-grid">
-
-        <div class="kpi-card">
-
-            <span>
-                Infrastructure
-            </span>
-
-            <strong id="totalInfrastructure">
-                0
-            </strong>
-
-        </div>
-
-
-        <div class="kpi-card earthquake-card">
-
-            <span>
-                Live Earthquakes
-            </span>
-
-            <strong id="liveEarthquakes">
-                0
-            </strong>
-
-        </div>
-
-
-        <div class="kpi-card affected-card">
-
-            <span>
-                Affected Assets
-            </span>
-
-            <strong id="affectedAssets">
-                0
-            </strong>
-
-        </div>
-
-
-        <div class="kpi-card risk-card">
-
-            <span>
-                High Risk
-            </span>
-
-            <strong id="highRisk">
-                0
-            </strong>
-
-        </div>
-
-
-        <div class="kpi-card critical-card">
-
-            <span>
-                Critical Events
-            </span>
-
-            <strong id="criticalEvents">
-                0
-            </strong>
-
-        </div>
-
-
-        <div class="kpi-card">
-
-            <span>
-                Feed
-            </span>
-
-            <strong
-                id="feedStatus"
-                class="feed-value"
-            >
-                LIVE
-            </strong>
-
-        </div>
-
-    </div>
-
-
+<div class="app-shell">
 
     <!-- =================================================
-         PHASE 6.3 SENSOR HEALTH + ALERTS
+         LEFT SIDEBAR
     ================================================== -->
+    <aside class="sidebar">
 
-    <section class="panel-section sensor-health-section">
-
-        <div class="section-title-row">
-
-            <div class="section-title">
-                PHASE 6.3 SENSOR HEALTH
+        <div class="brand">
+            <div class="brand-mark">
+                <span></span>
+                <span></span>
+                <span></span>
             </div>
 
-            <div
-                id="alertSocketIndicator"
-                class="alert-socket-indicator connecting"
-            >
-                CONNECTING
-            </div>
-
-        </div>
-
-        <div class="sensor-health-grid">
-
-            <div class="sensor-health-card">
-                <span>Monitored</span>
-                <strong id="monitoredSensors">0</strong>
-            </div>
-
-            <div class="sensor-health-card online">
-                <span>Online</span>
-                <strong id="onlineSensors">0</strong>
-            </div>
-
-            <div class="sensor-health-card degraded">
-                <span>Degraded</span>
-                <strong id="degradedSensors">0</strong>
-            </div>
-
-            <div class="sensor-health-card offline">
-                <span>Offline</span>
-                <strong id="offlineSensors">0</strong>
-            </div>
-
-            <div class="sensor-health-card">
-                <span>Avg Health</span>
-                <strong id="averageSensorHealth">0%</strong>
-            </div>
-
-            <div class="sensor-health-card alerts">
-                <span>Active Alerts</span>
-                <strong id="activeAlertsCount">0</strong>
-            </div>
-
-        </div>
-
-        <div class="alert-summary-grid">
-            <div class="alert-summary-item critical">
-                <span>Critical</span>
-                <strong id="criticalAlertCount">0</strong>
-            </div>
-
-            <div class="alert-summary-item high">
-                <span>High</span>
-                <strong id="highAlertCount">0</strong>
-            </div>
-
-            <div class="alert-summary-item medium">
-                <span>Medium</span>
-                <strong id="mediumAlertCount">0</strong>
-            </div>
-
-            <div class="alert-summary-item low">
-                <span>Low</span>
-                <strong id="lowAlertCount">0</strong>
+            <div>
+                <div class="brand-name">GeoInfra</div>
+                <div class="brand-subtitle">
+                    Infrastructure Monitoring System
+                </div>
             </div>
         </div>
 
-        <div class="alerts-subtitle">
-            ACTIVE SENSOR ALERTS
-        </div>
+        <nav class="nav-menu" aria-label="Dashboard navigation">
 
-        <div
-            id="alertFeed"
-            class="alert-feed"
-        >
-            <div class="empty-state">
-                Loading local sensor alerts...
-            </div>
-        </div>
-
-    </section>
-
-
-
-    <!-- =================================================
-         PHASE 6.5 TELEMETRY ALERTING
-    ================================================== -->
-
-    <section class="panel-section telemetry-alert-section">
-
-        <div class="section-title-row">
-
-            <div class="section-title">
-                PHASE 6.5 TELEMETRY ALERTING
-            </div>
-
-            <div
-                id="telemetryAlertStatus"
-                class="telemetry-alert-status connecting"
-            >
-                CONNECTING
-            </div>
-
-        </div>
-
-        <div class="telemetry-alert-summary">
-
-            <div class="telemetry-alert-kpi">
-                <span>Active</span>
-                <strong id="telemetryAlertTotal">0</strong>
-            </div>
-
-            <div class="telemetry-alert-kpi critical">
-                <span>Critical</span>
-                <strong id="telemetryAlertCritical">0</strong>
-            </div>
-
-            <div class="telemetry-alert-kpi high">
-                <span>High</span>
-                <strong id="telemetryAlertHigh">0</strong>
-            </div>
-
-            <div class="telemetry-alert-kpi medium">
-                <span>Medium</span>
-                <strong id="telemetryAlertMedium">0</strong>
-            </div>
-
-            <div class="telemetry-alert-kpi">
-                <span>Trend</span>
-                <strong id="telemetryTrendAlertCount">0</strong>
-            </div>
-
-            <div class="telemetry-alert-kpi">
-                <span>Assets</span>
-                <strong id="telemetryAlertAssets">0</strong>
-            </div>
-
-        </div>
-
-        <div class="telemetry-alert-filter-row">
-
-            <label for="telemetryAlertSeverity">
-                FILTER
-            </label>
-
-            <select id="telemetryAlertSeverity">
-                <option value="all">All severities</option>
-                <option value="critical">Critical</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-            </select>
-
-        </div>
-
-        <div
-            id="telemetryAlertMeta"
-            class="telemetry-alert-meta"
-        >
-            Trend window: 5 min
-        </div>
-
-        <div
-            id="telemetryAlertFeed"
-            class="telemetry-alert-feed"
-        >
-            <div class="empty-state">
-                Waiting for telemetry alert stream...
-            </div>
-        </div>
-
-    </section>
-
-
-    <!-- =================================================
-         PHASE 6.6 PERSISTED ALERT LIFECYCLE
-    ================================================== -->
-
-    <section class="panel-section persisted-alert-section">
-
-        <div class="section-title-row">
-
-            <div class="section-title">
-                PHASE 6.6 ALERT LIFECYCLE
-            </div>
-
-            <div
-                id="persistedAlertStatus"
-                class="persisted-alert-status loading"
-            >
-                LOADING
-            </div>
-
-        </div>
-
-        <div class="persisted-alert-summary">
-
-            <div class="persisted-alert-kpi active">
-                <span>Active</span>
-                <strong id="persistedAlertActive">0</strong>
-            </div>
-
-            <div class="persisted-alert-kpi acknowledged">
-                <span>Ack</span>
-                <strong id="persistedAlertAcknowledged">0</strong>
-            </div>
-
-            <div class="persisted-alert-kpi resolved">
-                <span>Resolved</span>
-                <strong id="persistedAlertResolved">0</strong>
-            </div>
-
-        </div>
-
-        <div class="persisted-alert-controls">
-
-            <div class="persisted-alert-control">
-
-                <label for="persistedAlertStatusFilter">
-                    STATUS
-                </label>
-
-                <select id="persistedAlertStatusFilter">
-                    <option value="all">All states</option>
-                    <option value="active">Active</option>
-                    <option value="acknowledged">Acknowledged</option>
-                    <option value="resolved">Resolved</option>
-                </select>
-
-            </div>
-
-            <div class="persisted-alert-control">
-
-                <label for="persistedAlertSeverityFilter">
-                    SEVERITY
-                </label>
-
-                <select id="persistedAlertSeverityFilter">
-                    <option value="all">All severities</option>
-                    <option value="critical">Critical</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                </select>
-
-            </div>
-
-        </div>
-
-        <div class="persisted-alert-operator-row">
-
-            <label for="persistedAlertOperator">
-                OPERATOR
-            </label>
-
-            <input
-                id="persistedAlertOperator"
-                type="text"
-                maxlength="100"
-                value="operator"
-                autocomplete="off"
-            />
-
-        </div>
-
-        <div class="persisted-alert-toolbar">
-
-            <button
-                id="refreshPersistedAlerts"
-                class="persisted-alert-refresh"
-                type="button"
-            >
-                Refresh
+            <button class="nav-item active" data-scroll-target="overviewSection">
+                <span class="nav-icon">⌂</span>
+                <span>Overview</span>
             </button>
 
-            <span id="persistedAlertMeta">
-                Waiting for persisted alerts...
-            </span>
+            <button class="nav-item" data-scroll-target="mapSection">
+                <span class="nav-icon">◇</span>
+                <span>Map</span>
+            </button>
 
-        </div>
+            <button class="nav-item" data-scroll-target="sensorSection">
+                <span class="nav-icon">◎</span>
+                <span>Infrastructure</span>
+            </button>
 
-        <div
-            id="persistedAlertFeed"
-            class="persisted-alert-feed"
-        >
-            <div class="empty-state">
-                Loading PostgreSQL alert history...
+            <button class="nav-item" data-scroll-target="telemetrySection">
+                <span class="nav-icon">⌁</span>
+                <span>Telemetry</span>
+            </button>
+
+            <button class="nav-item" data-scroll-target="eventsSection">
+                <span class="nav-icon">◉</span>
+                <span>Live Data</span>
+            </button>
+
+            <button class="nav-item" data-scroll-target="alertsSection">
+                <span class="nav-icon">△</span>
+                <span>Alerts</span>
+                <span class="nav-count" id="sidebarAlertCount">0</span>
+            </button>
+
+            <button class="nav-item" data-scroll-target="lifecycleSection">
+                <span class="nav-icon">◷</span>
+                <span>Alert History</span>
+            </button>
+
+            <button class="nav-item" data-scroll-target="analyticsSection">
+                <span class="nav-icon">▥</span>
+                <span>Analytics</span>
+            </button>
+
+            <button class="nav-item" data-scroll-target="testSection">
+                <span class="nav-icon">⚙</span>
+                <span>Test Mode</span>
+            </button>
+
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="profile-card">
+                <div class="profile-avatar">NM</div>
+                <div class="profile-copy">
+                    <strong>Nikunj</strong>
+                    <span>Administrator</span>
+                </div>
+            </div>
+
+            <div class="sidebar-quote">
+                “Monitoring today<br>for a smarter tomorrow”
+            </div>
+
+            <div class="version-label">
+                v6.6.0
             </div>
         </div>
 
-    </section>
+    </aside>
 
 
     <!-- =================================================
-         PHASE 6.4 TELEMETRY HISTORY
+         MAIN AREA
     ================================================== -->
+    <main class="main-area" id="dashboardMain">
 
-    <section class="panel-section telemetry-history-section">
+        <!-- TOP BAR -->
+        <header class="topbar">
 
-        <div class="section-title-row">
-
-            <div class="section-title">
-                PHASE 6.4 TELEMETRY HISTORY
+            <div class="global-search">
+                <span class="search-icon">⌕</span>
+                <input
+                    id="searchBox"
+                    type="text"
+                    placeholder="Search locations, infrastructure, sensors..."
+                    autocomplete="off"
+                >
             </div>
 
-            <div class="history-live-controls">
+            <div class="topbar-status">
+
+                <div class="online-pill">
+                    <span class="online-dot"></span>
+                    <span>System Online</span>
+                </div>
+
+                <div class="live-pill" id="dataSourceStatus">
+                    USGS LIVE
+                </div>
+
+                <div class="topbar-clock">
+                    <span id="dashboardDate">—</span>
+                    <strong id="dashboardClock">—</strong>
+                </div>
 
                 <div
-                    id="telemetryHistoryStatus"
-                    class="history-status ready"
+                    id="systemStatus"
+                    class="status-badge online"
                 >
-                    READY
+                    ONLINE
                 </div>
 
-                <button
-                    id="toggleHistoryRefresh"
-                    class="history-pause-button"
-                    type="button"
-                    aria-pressed="false"
-                    title="Pause automatic telemetry history refresh"
+            </div>
+
+        </header>
+
+
+        <!-- =================================================
+             OVERVIEW
+        ================================================== -->
+        <section class="dashboard-section" id="overviewSection">
+
+            <div class="page-heading">
+                <div>
+                    <p class="eyebrow">REAL-TIME SITUATIONAL AWARENESS</p>
+                    <h1>
+                        Infrastructure
+                        <span>Command Center</span>
+                    </h1>
+                    <p>
+                        Live geospatial monitoring, telemetry intelligence,
+                        risk analysis and incident lifecycle management.
+                    </p>
+                </div>
+
+                <div class="heading-badges">
+                    <span class="heading-badge">
+                        LOCAL TELEMETRY
+                    </span>
+                    <span class="heading-badge purple">
+                        POSTGIS
+                    </span>
+                    <span class="heading-badge cyan">
+                        WEBSOCKETS
+                    </span>
+                </div>
+            </div>
+
+
+            <!-- KPI CARDS -->
+            <div class="hero-kpi-grid">
+
+                <article class="hero-kpi cyan-card">
+                    <div class="hero-kpi-icon">▱</div>
+                    <div class="hero-kpi-copy">
+                        <span>Total Infrastructure</span>
+                        <strong id="totalInfrastructure">0</strong>
+                        <small>Monitored assets</small>
+                    </div>
+                    <div class="sparkline cyan-line"></div>
+                </article>
+
+                <article class="hero-kpi green-card">
+                    <div class="hero-kpi-icon">♡</div>
+                    <div class="hero-kpi-copy">
+                        <span>Healthy Sensors</span>
+                        <strong id="averageSensorHealth">0%</strong>
+                        <small id="sensorHealthKpiLabel">Local project telemetry</small>
+                    </div>
+                    <div class="sparkline green-line"></div>
+                </article>
+
+                <article class="hero-kpi red-card">
+                    <div class="hero-kpi-icon">!</div>
+                    <div class="hero-kpi-copy">
+                        <span>Active Alerts</span>
+                        <strong id="activeAlertsCount">0</strong>
+                        <small>Sensor health alerts</small>
+                    </div>
+                    <div class="sparkline red-line"></div>
+                </article>
+
+                <article class="hero-kpi purple-card">
+                    <div class="hero-kpi-icon">▥</div>
+                    <div class="hero-kpi-copy">
+                        <span>Live Earthquakes</span>
+                        <strong id="liveEarthquakes">0</strong>
+                        <small id="feedStatus">LIVE</small>
+                    </div>
+                    <div class="sparkline purple-line"></div>
+                </article>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             MAP + RECENT ALERTS
+        ================================================== -->
+        <section class="dashboard-section workspace-grid" id="mapSection">
+
+            <article class="glass-card map-card">
+
+                <div class="card-heading map-heading">
+                    <div>
+                        <span class="card-kicker">GEOSPATIAL VIEW</span>
+                        <h2>Live Infrastructure Map</h2>
+                    </div>
+
+                    <div class="map-toolbar">
+
+                        <div class="map-filter">
+                            <label for="typeFilter">TYPE</label>
+                            <select id="typeFilter">
+                                <option value="all">All Infrastructure</option>
+                            </select>
+                        </div>
+
+                        <div class="map-filter">
+                            <label for="riskFilter">RISK</label>
+                            <select id="riskFilter">
+                                <option value="all">All Risk Levels</option>
+                                <option value="critical">Critical</option>
+                                <option value="high">High</option>
+                                <option value="medium">Medium</option>
+                                <option value="low">Low</option>
+                            </select>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="map-stage">
+                    <div id="map"></div>
+
+                    <div class="map-overlay-top">
+                        <span class="map-chip cyan">
+                            LIVE MAP
+                        </span>
+                        <span class="map-chip">
+                            Phase 6.6
+                        </span>
+                    </div>
+
+                    <div class="map-overlay-bottom">
+                        <span>
+                            Showing real-time infrastructure nodes
+                        </span>
+                        <strong class="live-text">
+                            LIVE
+                        </strong>
+                    </div>
+                </div>
+
+                <div class="map-metrics">
+                    <div>
+                        <span>Affected Assets</span>
+                        <strong id="affectedAssets">0</strong>
+                    </div>
+                    <div>
+                        <span>High Risk</span>
+                        <strong id="highRisk">0</strong>
+                    </div>
+                    <div>
+                        <span>Critical Events</span>
+                        <strong id="criticalEvents">0</strong>
+                    </div>
+                </div>
+
+            </article>
+
+
+            <div class="right-stack" id="alertsSection">
+
+                <!-- Phase 6.5 alerts -->
+                <article class="glass-card compact-card telemetry-alert-section">
+
+                    <div class="card-heading">
+                        <div>
+                            <span class="card-kicker">PHASE 6.5</span>
+                            <h2>Recent Alerts</h2>
+                        </div>
+
+                        <div
+                            id="telemetryAlertStatus"
+                            class="telemetry-alert-status connecting"
+                        >
+                            CONNECTING
+                        </div>
+                    </div>
+
+                    <div class="alert-mini-stats">
+                        <div>
+                            <span>Active</span>
+                            <strong id="telemetryAlertTotal">0</strong>
+                        </div>
+                        <div class="critical">
+                            <span>Critical</span>
+                            <strong id="telemetryAlertCritical">0</strong>
+                        </div>
+                        <div class="high">
+                            <span>High</span>
+                            <strong id="telemetryAlertHigh">0</strong>
+                        </div>
+                        <div class="medium">
+                            <span>Medium</span>
+                            <strong id="telemetryAlertMedium">0</strong>
+                        </div>
+                    </div>
+
+                    <div class="filter-strip">
+                        <select id="telemetryAlertSeverity">
+                            <option value="all">All severities</option>
+                            <option value="critical">Critical</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+
+                        <span id="telemetryAlertMeta">
+                            Trend window: 5 min
+                        </span>
+                    </div>
+
+                    <div class="hidden-metrics">
+                        <strong id="telemetryTrendAlertCount">0</strong>
+                        <strong id="telemetryAlertAssets">0</strong>
+                    </div>
+
+                    <div
+                        id="telemetryAlertFeed"
+                        class="telemetry-alert-feed modern-feed"
+                    >
+                        <div class="empty-state">
+                            Waiting for telemetry alert stream...
+                        </div>
+                    </div>
+
+                </article>
+
+
+                <!-- Infrastructure health -->
+                <article class="glass-card compact-card health-overview-card">
+
+                    <div class="card-heading">
+                        <div>
+                            <span class="card-kicker">LOCAL PROJECT</span>
+                            <h2>Infrastructure Health</h2>
+                        </div>
+
+                        <div
+                            id="alertSocketIndicator"
+                            class="alert-socket-indicator connecting"
+                        >
+                            CONNECTING
+                        </div>
+                    </div>
+
+                    <div class="health-ring-wrap">
+
+                        <div
+                            class="health-ring"
+                            id="healthRing"
+                        >
+                            <div class="health-ring-inner">
+                                <strong id="healthRingValue">0%</strong>
+                                <span>Healthy</span>
+                            </div>
+                        </div>
+
+                        <div class="health-breakdown">
+                            <div>
+                                <span class="legend-dot healthy"></span>
+                                <span>Online</span>
+                                <strong id="onlineSensors">0</strong>
+                            </div>
+                            <div>
+                                <span class="legend-dot warning"></span>
+                                <span>Degraded</span>
+                                <strong id="degradedSensors">0</strong>
+                            </div>
+                            <div>
+                                <span class="legend-dot critical"></span>
+                                <span>Offline</span>
+                                <strong id="offlineSensors">0</strong>
+                            </div>
+                            <div>
+                                <span class="legend-dot monitored"></span>
+                                <span>Monitored</span>
+                                <strong id="monitoredSensors">0</strong>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </article>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             TELEMETRY HISTORY
+        ================================================== -->
+        <section class="dashboard-section analytics-grid" id="telemetrySection">
+
+            <article class="glass-card telemetry-history-section">
+
+                <div class="card-heading">
+                    <div>
+                        <span class="card-kicker">PHASE 6.4</span>
+                        <h2>Live Sensor Telemetry</h2>
+                    </div>
+
+                    <div class="history-live-controls">
+                        <div
+                            id="telemetryHistoryStatus"
+                            class="history-status ready"
+                        >
+                            READY
+                        </div>
+
+                        <button
+                            id="toggleHistoryRefresh"
+                            class="neon-button small"
+                            type="button"
+                            aria-pressed="false"
+                        >
+                            Pause
+                        </button>
+                    </div>
+                </div>
+
+                <div class="telemetry-controls">
+
+                    <div class="history-control wide">
+                        <label for="historyAsset">
+                            INFRASTRUCTURE ASSET
+                        </label>
+                        <select id="historyAsset">
+                            <option value="">
+                                Select infrastructure...
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="history-control">
+                        <label for="historyRange">
+                            TIME RANGE
+                        </label>
+                        <select id="historyRange">
+                            <option value="1">Last 1 hour</option>
+                            <option value="6">Last 6 hours</option>
+                            <option value="24" selected>Last 24 hours</option>
+                            <option value="168">Last 7 days</option>
+                        </select>
+                    </div>
+
+                    <button
+                        id="refreshHistory"
+                        class="neon-button"
+                        type="button"
+                    >
+                        Refresh
+                    </button>
+
+                </div>
+
+                <div class="history-refresh-meta">
+                    <div class="history-refresh-indicator">
+                        <span
+                            id="historyRefreshDot"
+                            class="history-refresh-dot live"
+                        ></span>
+                        <span id="historyRefreshMode">
+                            Auto-refresh active
+                        </span>
+                    </div>
+
+                    <div id="historyLastUpdated">
+                        Last updated: Never
+                    </div>
+                </div>
+
+                <div id="historySummary" class="history-summary-grid">
+                    <div>
+                        <span>Samples</span>
+                        <strong id="historySamples">0</strong>
+                    </div>
+                    <div>
+                        <span>Avg Health</span>
+                        <strong id="historyAvgHealth">--</strong>
+                    </div>
+                    <div>
+                        <span>Avg CPU</span>
+                        <strong id="historyAvgCpu">--</strong>
+                    </div>
+                    <div>
+                        <span>Avg Temp</span>
+                        <strong id="historyAvgTemp">--</strong>
+                    </div>
+                </div>
+
+                <div
+                    id="telemetryHistoryEmpty"
+                    class="empty-state history-empty-state"
                 >
-                    Pause
-                </button>
-
-            </div>
-
-        </div>
-
-        <div class="history-control">
-
-            <label for="historyAsset">
-                INFRASTRUCTURE ASSET
-            </label>
-
-            <select id="historyAsset">
-                <option value="">
-                    Select infrastructure...
-                </option>
-            </select>
-
-        </div>
-
-        <div class="history-toolbar">
-
-            <div class="history-control">
-                <label for="historyRange">
-                    TIME RANGE
-                </label>
-
-                <select id="historyRange">
-                    <option value="1">Last 1 hour</option>
-                    <option value="6">Last 6 hours</option>
-                    <option value="24" selected>Last 24 hours</option>
-                    <option value="168">Last 7 days</option>
-                </select>
-            </div>
-
-            <button
-                id="refreshHistory"
-                class="history-refresh-button"
-                type="button"
-            >
-                Refresh
-            </button>
-
-        </div>
-
-        <div class="history-refresh-meta">
-
-            <div class="history-refresh-indicator">
-                <span
-                    id="historyRefreshDot"
-                    class="history-refresh-dot live"
-                ></span>
-
-                <span id="historyRefreshMode">
-                    Auto-refresh active
-                </span>
-            </div>
-
-            <div
-                id="historyLastUpdated"
-                class="history-last-updated"
-            >
-                Last updated: Never
-            </div>
-
-        </div>
-
-        <div
-            id="historySummary"
-            class="history-summary-grid"
-        >
-            <div class="history-summary-card">
-                <span>Samples</span>
-                <strong id="historySamples">0</strong>
-            </div>
-
-            <div class="history-summary-card">
-                <span>Avg Health</span>
-                <strong id="historyAvgHealth">--</strong>
-            </div>
-
-            <div class="history-summary-card">
-                <span>Avg CPU</span>
-                <strong id="historyAvgCpu">--</strong>
-            </div>
-
-            <div class="history-summary-card">
-                <span>Avg Temp</span>
-                <strong id="historyAvgTemp">--</strong>
-            </div>
-        </div>
-
-        <div
-            id="telemetryHistoryEmpty"
-            class="empty-state history-empty-state"
-        >
-            Select an infrastructure asset to load persisted telemetry history.
-        </div>
-
-        <div
-            id="telemetryCharts"
-            class="telemetry-charts hidden"
-        >
-
-            <div class="telemetry-chart-card">
-                <div class="telemetry-chart-header">
-                    <span>Health</span>
-                    <strong id="historyHealthLatest">--</strong>
+                    Select an infrastructure asset to load persisted telemetry history.
                 </div>
-                <div id="healthHistoryChart" class="telemetry-chart"></div>
-            </div>
 
-            <div class="telemetry-chart-card">
-                <div class="telemetry-chart-header">
-                    <span>CPU</span>
-                    <strong id="historyCpuLatest">--</strong>
-                </div>
-                <div id="cpuHistoryChart" class="telemetry-chart"></div>
-            </div>
-
-            <div class="telemetry-chart-card">
-                <div class="telemetry-chart-header">
-                    <span>Temperature</span>
-                    <strong id="historyTempLatest">--</strong>
-                </div>
-                <div id="temperatureHistoryChart" class="telemetry-chart"></div>
-            </div>
-
-            <div class="telemetry-chart-card">
-                <div class="telemetry-chart-header">
-                    <span>Latency</span>
-                    <strong id="historyLatencyLatest">--</strong>
-                </div>
-                <div id="latencyHistoryChart" class="telemetry-chart"></div>
-            </div>
-
-            <div class="telemetry-chart-card">
-                <div class="telemetry-chart-header">
-                    <span>Packet Loss</span>
-                    <strong id="historyPacketLossLatest">--</strong>
-                </div>
-                <div id="packetLossHistoryChart" class="telemetry-chart"></div>
-            </div>
-
-        </div>
-
-    </section>
-
-    <!-- =================================================
-         PHASE 6.1 TEST MODE
-    ================================================== -->
-
-    <section class="panel-section test-section">
-
-        <div class="section-title-row">
-
-            <div class="section-title">
-                PHASE 6.1 TEST MODE
-            </div>
-
-            <div
-                id="testModeIndicator"
-                class="test-indicator inactive"
-            >
-                OFF
-            </div>
-
-        </div>
-
-
-        <div class="test-warning">
-
-            Simulated events are clearly marked
-            as TEST and are never treated as
-            real USGS earthquakes.
-
-        </div>
-
-
-        <div class="test-control">
-
-            <label for="testAsset">
-                TARGET INFRASTRUCTURE
-            </label>
-
-            <select id="testAsset">
-
-                <option value="">
-                    Select infrastructure...
-                </option>
-
-            </select>
-
-        </div>
-
-
-        <div class="test-grid">
-
-            <div class="test-control">
-
-                <label for="testMagnitude">
-                    MAGNITUDE
-                </label>
-
-                <input
-                    id="testMagnitude"
-                    type="number"
-                    min="2.5"
-                    max="9.5"
-                    step="0.1"
-                    value="6.2"
+                <div
+                    id="telemetryCharts"
+                    class="telemetry-charts hidden"
                 >
+                    <div class="telemetry-chart-card primary-chart">
+                        <div class="telemetry-chart-header">
+                            <span>Health</span>
+                            <strong id="historyHealthLatest">--</strong>
+                        </div>
+                        <div id="healthHistoryChart" class="telemetry-chart"></div>
+                    </div>
 
-            </div>
+                    <div class="telemetry-chart-card">
+                        <div class="telemetry-chart-header">
+                            <span>CPU</span>
+                            <strong id="historyCpuLatest">--</strong>
+                        </div>
+                        <div id="cpuHistoryChart" class="telemetry-chart"></div>
+                    </div>
+
+                    <div class="telemetry-chart-card">
+                        <div class="telemetry-chart-header">
+                            <span>Temperature</span>
+                            <strong id="historyTempLatest">--</strong>
+                        </div>
+                        <div id="temperatureHistoryChart" class="telemetry-chart"></div>
+                    </div>
+
+                    <div class="telemetry-chart-card">
+                        <div class="telemetry-chart-header">
+                            <span>Latency</span>
+                            <strong id="historyLatencyLatest">--</strong>
+                        </div>
+                        <div id="latencyHistoryChart" class="telemetry-chart"></div>
+                    </div>
+
+                    <div class="telemetry-chart-card">
+                        <div class="telemetry-chart-header">
+                            <span>Packet Loss</span>
+                            <strong id="historyPacketLossLatest">--</strong>
+                        </div>
+                        <div id="packetLossHistoryChart" class="telemetry-chart"></div>
+                    </div>
+                </div>
+
+            </article>
 
 
-            <div class="test-control">
+            <!-- Phase 6.3 detailed health -->
+            <article class="glass-card sensor-health-section" id="sensorSection">
 
-                <label for="testRadius">
-                    RADIUS KM
-                </label>
+                <div class="card-heading">
+                    <div>
+                        <span class="card-kicker">PHASE 6.3</span>
+                        <h2>Sensor Health</h2>
+                    </div>
+                </div>
 
-                <input
-                    id="testRadius"
-                    type="number"
-                    min="1"
-                    max="2000"
-                    step="1"
-                    value="200"
+                <div class="sensor-health-grid modern">
+                    <div class="sensor-health-card">
+                        <span>Health Alerts</span>
+                        <strong id="criticalAlertCount">0</strong>
+                        <small>Critical</small>
+                    </div>
+
+                    <div class="sensor-health-card high">
+                        <span>High</span>
+                        <strong id="highAlertCount">0</strong>
+                        <small>Severity</small>
+                    </div>
+
+                    <div class="sensor-health-card degraded">
+                        <span>Medium</span>
+                        <strong id="mediumAlertCount">0</strong>
+                        <small>Severity</small>
+                    </div>
+
+                    <div class="sensor-health-card online">
+                        <span>Low</span>
+                        <strong id="lowAlertCount">0</strong>
+                        <small>Severity</small>
+                    </div>
+                </div>
+
+                <div class="section-subtitle">
+                    ACTIVE SENSOR ALERTS
+                </div>
+
+                <div id="alertFeed" class="alert-feed modern-feed">
+                    <div class="empty-state">
+                        Loading local sensor alerts...
+                    </div>
+                </div>
+
+            </article>
+
+        </section>
+
+
+        <!-- =================================================
+             PERSISTED ALERT LIFECYCLE
+        ================================================== -->
+        <section class="dashboard-section lifecycle-grid" id="lifecycleSection">
+
+            <article class="glass-card persisted-alert-section">
+
+                <div class="card-heading">
+                    <div>
+                        <span class="card-kicker">PHASE 6.6</span>
+                        <h2>Alert Lifecycle</h2>
+                    </div>
+
+                    <div
+                        id="persistedAlertStatus"
+                        class="persisted-alert-status loading"
+                    >
+                        LOADING
+                    </div>
+                </div>
+
+                <div class="persisted-alert-summary">
+                    <div class="persisted-alert-kpi active">
+                        <span>Active</span>
+                        <strong id="persistedAlertActive">0</strong>
+                    </div>
+                    <div class="persisted-alert-kpi acknowledged">
+                        <span>Acknowledged</span>
+                        <strong id="persistedAlertAcknowledged">0</strong>
+                    </div>
+                    <div class="persisted-alert-kpi resolved">
+                        <span>Resolved</span>
+                        <strong id="persistedAlertResolved">0</strong>
+                    </div>
+                </div>
+
+                <div class="persisted-alert-controls">
+
+                    <div class="persisted-alert-control">
+                        <label for="persistedAlertStatusFilter">
+                            STATUS
+                        </label>
+                        <select id="persistedAlertStatusFilter">
+                            <option value="all">All states</option>
+                            <option value="active">Active</option>
+                            <option value="acknowledged">Acknowledged</option>
+                            <option value="resolved">Resolved</option>
+                        </select>
+                    </div>
+
+                    <div class="persisted-alert-control">
+                        <label for="persistedAlertSeverityFilter">
+                            SEVERITY
+                        </label>
+                        <select id="persistedAlertSeverityFilter">
+                            <option value="all">All severities</option>
+                            <option value="critical">Critical</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+                    </div>
+
+                    <div class="persisted-alert-control">
+                        <label for="persistedAlertOperator">
+                            OPERATOR
+                        </label>
+                        <input
+                            id="persistedAlertOperator"
+                            type="text"
+                            maxlength="100"
+                            value="Nikunj"
+                            autocomplete="off"
+                        >
+                    </div>
+
+                    <button
+                        id="refreshPersistedAlerts"
+                        class="neon-button lifecycle-refresh"
+                        type="button"
+                    >
+                        Refresh
+                    </button>
+
+                </div>
+
+                <div id="persistedAlertMeta" class="panel-meta">
+                    Waiting for persisted alerts...
+                </div>
+
+                <div
+                    id="persistedAlertFeed"
+                    class="persisted-alert-feed"
                 >
+                    <div class="empty-state">
+                        Loading PostgreSQL alert history...
+                    </div>
+                </div>
 
-            </div>
-
-        </div>
-
-
-        <button
-            id="createTestEvent"
-            class="test-button create-button"
-            type="button"
-        >
-            Create Test Earthquake
-        </button>
+            </article>
 
 
-        <button
-            id="removeTestEvent"
-            class="test-button remove-button"
-            type="button"
-            disabled
-        >
-            Remove Test Earthquake
-        </button>
+            <aside class="glass-card operational-summary">
+
+                <div class="card-heading">
+                    <div>
+                        <span class="card-kicker">OPERATIONS</span>
+                        <h2>Command Summary</h2>
+                    </div>
+                </div>
+
+                <div class="ops-metric-grid">
+                    <div>
+                        <span>Risk Assets</span>
+                        <strong id="opsRiskValue">—</strong>
+                    </div>
+                    <div>
+                        <span>Alert Assets</span>
+                        <strong id="opsAlertAssetValue">—</strong>
+                    </div>
+                    <div>
+                        <span>Trend Alerts</span>
+                        <strong id="opsTrendValue">—</strong>
+                    </div>
+                    <div>
+                        <span>Feed</span>
+                        <strong>LIVE</strong>
+                    </div>
+                </div>
+
+                <div class="quick-actions">
+                    <button data-scroll-target="mapSection">
+                        <span>＋</span>
+                        <div>
+                            <strong>View Map</strong>
+                            <small>Infrastructure nodes</small>
+                        </div>
+                    </button>
+
+                    <button data-scroll-target="alertsSection">
+                        <span>△</span>
+                        <div>
+                            <strong>Manage Alerts</strong>
+                            <small>Live anomalies</small>
+                        </div>
+                    </button>
+
+                    <button data-scroll-target="lifecycleSection">
+                        <span>◷</span>
+                        <div>
+                            <strong>Alert History</strong>
+                            <small>Audit lifecycle</small>
+                        </div>
+                    </button>
+
+                    <button data-scroll-target="testSection">
+                        <span>⚙</span>
+                        <div>
+                            <strong>Test Mode</strong>
+                            <small>Local simulation</small>
+                        </div>
+                    </button>
+                </div>
+
+            </aside>
+
+        </section>
 
 
-        <div
-            id="testEventStatus"
-            class="test-status"
-        >
-            No simulated event active.
-        </div>
+        <!-- =================================================
+             ANALYTICS + EVENTS
+        ================================================== -->
+        <section class="dashboard-section lower-grid" id="analyticsSection">
 
-    </section>
+            <article class="glass-card">
 
+                <div class="card-heading">
+                    <div>
+                        <span class="card-kicker">ANALYTICS</span>
+                        <h2>Infrastructure by Type</h2>
+                    </div>
+                </div>
 
-    <!-- ASSET DISTRIBUTION -->
+                <div id="typeStats" class="type-stats-modern">
+                    Loading...
+                </div>
 
-    <section class="panel-section">
+            </article>
 
-        <div class="section-title">
-            ASSET DISTRIBUTION
-        </div>
+            <article class="glass-card" id="eventsSection">
 
-        <div id="typeStats">
-            Loading...
-        </div>
+                <div class="card-heading">
+                    <div>
+                        <span class="card-kicker">RISK INTELLIGENCE</span>
+                        <h2>Exposed Infrastructure</h2>
+                    </div>
+                    <span class="warning-dot"></span>
+                </div>
 
-    </section>
+                <div id="riskFeed" class="event-feed modern-feed">
+                    Loading risk data...
+                </div>
 
+            </article>
 
-    <!-- EXPOSED INFRASTRUCTURE -->
+            <article class="glass-card">
 
-    <section class="panel-section">
+                <div class="card-heading">
+                    <div>
+                        <span class="card-kicker">LIVE / TEST</span>
+                        <h2>Earthquake Events</h2>
+                    </div>
+                    <span class="live-dot"></span>
+                </div>
 
-        <div class="section-title-row">
+                <div id="eventFeed" class="event-feed modern-feed">
+                    Loading earthquake feed...
+                </div>
 
-            <div class="section-title">
-                EXPOSED INFRASTRUCTURE
-            </div>
+            </article>
 
-            <span class="warning-dot"></span>
-
-        </div>
-
-
-        <div
-            id="riskFeed"
-            class="event-feed"
-        >
-            Loading risk data...
-        </div>
-
-    </section>
-
-
-    <!-- LIVE EARTHQUAKES -->
-
-    <section class="panel-section">
-
-        <div class="section-title-row">
-
-            <div class="section-title">
-                LIVE / TEST EARTHQUAKES
-            </div>
-
-            <span class="live-dot"></span>
-
-        </div>
+        </section>
 
 
-        <div
-            id="eventFeed"
-            class="event-feed"
-        >
-            Loading earthquake feed...
-        </div>
+        <!-- =================================================
+             TEST MODE
+        ================================================== -->
+        <section class="dashboard-section" id="testSection">
 
-    </section>
+            <article class="glass-card test-section">
 
-</aside>
+                <div class="card-heading">
+                    <div>
+                        <span class="card-kicker">PHASE 6.1</span>
+                        <h2>Local Test Mode</h2>
+                    </div>
+
+                    <div
+                        id="testModeIndicator"
+                        class="test-indicator inactive"
+                    >
+                        OFF
+                    </div>
+                </div>
+
+                <div class="test-warning">
+                    Simulated events are clearly marked as TEST and never
+                    treated as real USGS earthquakes.
+                </div>
+
+                <div class="test-form-grid">
+
+                    <div class="test-control wide">
+                        <label for="testAsset">
+                            TARGET INFRASTRUCTURE
+                        </label>
+                        <select id="testAsset">
+                            <option value="">
+                                Select infrastructure...
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="test-control">
+                        <label for="testMagnitude">
+                            MAGNITUDE
+                        </label>
+                        <input
+                            id="testMagnitude"
+                            type="number"
+                            min="2.5"
+                            max="9.5"
+                            step="0.1"
+                            value="6.2"
+                        >
+                    </div>
+
+                    <div class="test-control">
+                        <label for="testRadius">
+                            RADIUS KM
+                        </label>
+                        <input
+                            id="testRadius"
+                            type="number"
+                            min="1"
+                            max="2000"
+                            step="1"
+                            value="200"
+                        >
+                    </div>
+
+                    <button
+                        id="createTestEvent"
+                        class="neon-button danger"
+                        type="button"
+                    >
+                        Create Test Earthquake
+                    </button>
+
+                    <button
+                        id="removeTestEvent"
+                        class="neon-button subtle"
+                        type="button"
+                        disabled
+                    >
+                        Remove Test Earthquake
+                    </button>
+
+                </div>
+
+                <div id="testEventStatus" class="test-status">
+                    No simulated event active.
+                </div>
+
+            </article>
+
+        </section>
+
+
+        <footer class="dashboard-footer">
+            GeoInfra · Phase 6.6 · Local telemetry + PostgreSQL alert lifecycle
+        </footer>
+
+    </main>
+
+</div>
 
 
 <!-- =====================================================
      MAP LEGEND
 ===================================================== -->
-
 <div class="map-legend">
-
-    <div class="legend-title">
-        INFRASTRUCTURE
-    </div>
-
+    <div class="legend-title">INFRASTRUCTURE</div>
 
     <div class="legend-row">
-
-        <span>
-            <i class="legend-dot cloud"></i>
-            Cloud
-        </span>
-
-        <span>
-            <i class="legend-dot education"></i>
-            Education
-        </span>
-
-        <span>
-            <i class="legend-dot healthcare"></i>
-            Healthcare
-        </span>
-
-        <span>
-            <i class="legend-dot transport"></i>
-            Transport
-        </span>
-
-        <span>
-            <i class="legend-dot telecom"></i>
-            Telecom
-        </span>
-
+        <span><i style="background:#25c7ff"></i> Cloud</span>
+        <span><i style="background:#43df8c"></i> Education</span>
     </div>
-
-
-    <div class="legend-title risk-legend-title">
-        ESTIMATED EXPOSURE
-    </div>
-
 
     <div class="legend-row">
-
-        <span>
-            <i class="legend-dot risk-medium"></i>
-            Medium
-        </span>
-
-        <span>
-            <i class="legend-dot risk-high"></i>
-            High
-        </span>
-
-        <span>
-            <i class="legend-dot risk-critical"></i>
-            Critical
-        </span>
-
+        <span><i style="background:#ffc845"></i> Transport</span>
+        <span><i style="background:#c06cff"></i> Telecom</span>
     </div>
-
-
-    <div class="legend-title earthquake-legend-title">
-        EVENT SOURCE
-    </div>
-
 
     <div class="legend-row">
-
-        <span>
-            <i class="legend-dot quake"></i>
-            USGS
-        </span>
-
-        <span>
-            <i class="legend-dot test-quake"></i>
-            TEST
-        </span>
-
+        <span><i style="background:#ff5468"></i> Healthcare</span>
+        <span><i style="background:#cad4dc"></i> Other</span>
     </div>
 
+    <div class="legend-title secondary">RISK</div>
+
+    <div class="legend-row">
+        <span><i style="background:#ff4057"></i> Critical</span>
+        <span><i style="background:#ff843d"></i> High</span>
+    </div>
+
+    <div class="legend-row">
+        <span><i style="background:#ffc845"></i> Medium</span>
+        <span><i style="background:#5effa5"></i> Low</span>
+    </div>
+
+    <div class="legend-title secondary">EVENT</div>
+
+    <div class="legend-row">
+        <span><i class="event-dot usgs"></i> USGS</span>
+        <span><i class="event-dot test"></i> TEST</span>
+    </div>
 </div>
 
 
-
+<!-- =====================================================
+     ALERT HISTORY MODAL
+===================================================== -->
 <div
     id="alertHistoryModal"
     class="alert-history-modal"
     aria-hidden="true"
 >
-
     <div
         class="alert-history-backdrop"
         data-close-alert-history="true"
@@ -1020,19 +1050,14 @@
         aria-modal="true"
         aria-labelledby="alertHistoryTitle"
     >
-
         <div class="alert-history-header">
-
             <div>
-
                 <div class="alert-history-eyebrow">
                     PHASE 6.6 AUDIT TRAIL
                 </div>
-
                 <h2 id="alertHistoryTitle">
                     Alert History
                 </h2>
-
             </div>
 
             <button
@@ -1043,7 +1068,6 @@
             >
                 ×
             </button>
-
         </div>
 
         <div
@@ -1059,22 +1083,17 @@
                 Loading alert history...
             </div>
         </div>
-
     </div>
-
 </div>
 
 
-<script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<script
-    src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"
-></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
 <script src="app.js"></script>
 
 </body>
-
 </html>

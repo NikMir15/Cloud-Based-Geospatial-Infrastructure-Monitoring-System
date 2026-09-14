@@ -7302,3 +7302,400 @@ window.addEventListener(
         );
     }
 );
+
+
+/* =========================================================
+   PHASE 6.6 NEON DASHBOARD SHELL
+   Visual-only helpers. Existing monitoring logic remains intact.
+========================================================= */
+
+function updateDashboardClock() {
+
+    const now =
+        new Date();
+
+    const dateElement =
+        document.getElementById(
+            "dashboardDate"
+        );
+
+    const clockElement =
+        document.getElementById(
+            "dashboardClock"
+        );
+
+    if (dateElement) {
+
+        dateElement.textContent =
+            now.toLocaleDateString(
+                undefined,
+                {
+                    weekday: "short",
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric"
+                }
+            );
+    }
+
+    if (clockElement) {
+
+        clockElement.textContent =
+            now.toLocaleTimeString(
+                undefined,
+                {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit"
+                }
+            );
+    }
+}
+
+
+function updateDashboardMirrors() {
+
+    const healthSource =
+        document.getElementById(
+            "averageSensorHealth"
+        );
+
+    const healthRing =
+        document.getElementById(
+            "healthRing"
+        );
+
+    const healthRingValue =
+        document.getElementById(
+            "healthRingValue"
+        );
+
+    if (
+        healthSource
+        &&
+        healthRing
+        &&
+        healthRingValue
+    ) {
+
+        const match =
+            String(
+                healthSource.textContent
+                || "0"
+            ).match(
+                /-?\d+(?:\.\d+)?/
+            );
+
+        const health =
+            Math.max(
+                0,
+                Math.min(
+                    100,
+                    match
+                        ? Number(match[0])
+                        : 0
+                )
+            );
+
+        healthRingValue.textContent =
+            `${Math.round(health)}%`;
+
+        healthRing.style.setProperty(
+            "--health-angle",
+            `${health * 3.6}deg`
+        );
+    }
+
+
+    const alertSource =
+        document.getElementById(
+            "activeAlertsCount"
+        );
+
+    const sidebarAlertCount =
+        document.getElementById(
+            "sidebarAlertCount"
+        );
+
+    if (
+        alertSource
+        &&
+        sidebarAlertCount
+    ) {
+
+        sidebarAlertCount.textContent =
+            String(
+                alertSource.textContent
+                || "0"
+            );
+    }
+
+
+    const riskSource =
+        document.getElementById(
+            "highRisk"
+        );
+
+    const riskTarget =
+        document.getElementById(
+            "opsRiskValue"
+        );
+
+    if (
+        riskSource
+        &&
+        riskTarget
+    ) {
+
+        riskTarget.textContent =
+            String(
+                riskSource.textContent
+                || "0"
+            );
+    }
+
+
+    const alertAssetSource =
+        document.getElementById(
+            "telemetryAlertAssets"
+        );
+
+    const alertAssetTarget =
+        document.getElementById(
+            "opsAlertAssetValue"
+        );
+
+    if (
+        alertAssetSource
+        &&
+        alertAssetTarget
+    ) {
+
+        alertAssetTarget.textContent =
+            String(
+                alertAssetSource.textContent
+                || "0"
+            );
+    }
+
+
+    const trendSource =
+        document.getElementById(
+            "telemetryTrendAlertCount"
+        );
+
+    const trendTarget =
+        document.getElementById(
+            "opsTrendValue"
+        );
+
+    if (
+        trendSource
+        &&
+        trendTarget
+    ) {
+
+        trendTarget.textContent =
+            String(
+                trendSource.textContent
+                || "0"
+            );
+    }
+}
+
+
+function activateDashboardNavigation() {
+
+    const main =
+        document.getElementById(
+            "dashboardMain"
+        );
+
+    const buttons =
+        [
+            ...document.querySelectorAll(
+                "[data-scroll-target]"
+            )
+        ];
+
+    buttons.forEach(
+        button => {
+
+            button.addEventListener(
+                "click",
+                () => {
+
+                    const targetId =
+                        button.dataset.scrollTarget;
+
+                    const target =
+                        document.getElementById(
+                            targetId
+                        );
+
+                    if (!target) {
+                        return;
+                    }
+
+                    target.scrollIntoView(
+                        {
+                            behavior: "smooth",
+                            block: "start"
+                        }
+                    );
+
+                    document
+                        .querySelectorAll(
+                            ".nav-item"
+                        )
+                        .forEach(
+                            item =>
+                                item.classList.remove(
+                                    "active"
+                                )
+                        );
+
+                    if (
+                        button.classList.contains(
+                            "nav-item"
+                        )
+                    ) {
+
+                        button.classList.add(
+                            "active"
+                        );
+                    }
+                }
+            );
+        }
+    );
+
+
+    if (
+        main
+        &&
+        "IntersectionObserver"
+        in window
+    ) {
+
+        const navButtons =
+            [
+                ...document.querySelectorAll(
+                    ".nav-item[data-scroll-target]"
+                )
+            ];
+
+        const observer =
+            new IntersectionObserver(
+                entries => {
+
+                    const visible =
+                        entries
+                            .filter(
+                                entry =>
+                                    entry.isIntersecting
+                            )
+                            .sort(
+                                (
+                                    first,
+                                    second
+                                ) =>
+                                    second.intersectionRatio
+                                    -
+                                    first.intersectionRatio
+                            )[0];
+
+                    if (!visible) {
+                        return;
+                    }
+
+                    navButtons.forEach(
+                        button => {
+
+                            button.classList.toggle(
+                                "active",
+                                button.dataset.scrollTarget
+                                ===
+                                visible.target.id
+                            );
+                        }
+                    );
+                },
+                {
+                    root: main,
+                    threshold: [
+                        0.16,
+                        0.35,
+                        0.55
+                    ]
+                }
+            );
+
+        navButtons.forEach(
+            button => {
+
+                const section =
+                    document.getElementById(
+                        button.dataset.scrollTarget
+                    );
+
+                if (section) {
+                    observer.observe(section);
+                }
+            }
+        );
+    }
+}
+
+
+function initialiseNeonDashboardShell() {
+
+    updateDashboardClock();
+
+    setInterval(
+        updateDashboardClock,
+        1000
+    );
+
+    updateDashboardMirrors();
+
+    setInterval(
+        updateDashboardMirrors,
+        1500
+    );
+
+    activateDashboardNavigation();
+
+
+    setTimeout(
+        () => {
+
+            if (
+                typeof map !== "undefined"
+                &&
+                map
+            ) {
+
+                map.invalidateSize();
+            }
+        },
+        600
+    );
+}
+
+
+if (
+    document.readyState
+    === "loading"
+) {
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        initialiseNeonDashboardShell
+    );
+}
+
+else {
+
+    initialiseNeonDashboardShell();
+}
