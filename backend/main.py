@@ -22,6 +22,18 @@ from trend_alert_engine import (
     build_alert_summary as build_telemetry_alert_summary
 )
 
+
+from incident_engine import (
+    INCIDENT_STATUSES,
+    synchronize_incidents,
+    list_incidents,
+    load_incident_history,
+    update_incident_status,
+    assign_incident,
+    escalate_incident,
+    incident_metrics
+)
+
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
@@ -126,6 +138,28 @@ TELEMETRY_ALERT_PERSISTENCE_SECONDS = int(
 )
 
 
+INCIDENT_SYNC_SECONDS = int(
+    os.getenv(
+        "INCIDENT_SYNC_SECONDS",
+        "15"
+    )
+)
+
+INCIDENT_CORRELATION_MINUTES = int(
+    os.getenv(
+        "INCIDENT_CORRELATION_MINUTES",
+        "30"
+    )
+)
+
+INCIDENT_WEBSOCKET_SECONDS = int(
+    os.getenv(
+        "INCIDENT_WEBSOCKET_SECONDS",
+        "15"
+    )
+)
+
+
 # =========================================================
 # DATABASE
 # =========================================================
@@ -217,6 +251,41 @@ class AlertActionRequest(BaseModel):
     note: str | None = Field(
         default=None,
         max_length=1000
+    )
+
+
+
+class IncidentActionRequest(BaseModel):
+
+    changed_by: str = Field(
+        default="operator",
+        min_length=1,
+        max_length=100
+    )
+
+    note: str | None = Field(
+        default=None,
+        max_length=2000
+    )
+
+
+class IncidentAssignRequest(BaseModel):
+
+    owner: str = Field(
+        ...,
+        min_length=1,
+        max_length=150
+    )
+
+    changed_by: str = Field(
+        default="operator",
+        min_length=1,
+        max_length=100
+    )
+
+    note: str | None = Field(
+        default=None,
+        max_length=2000
     )
 
 
@@ -3241,6 +3310,56 @@ async def risk_update_loop():
         )
 
 
+
+# =========================================================
+# PHASE 6.7
+# INCIDENT CORRELATION BACKGROUND LOOP
+# =========================================================
+
+async def incident_sync_loop():
+
+    # Give Phase 6.6 persistence one cycle to initialise.
+    await asyncio.sleep(
+        min(
+            TELEMETRY_ALERT_PERSISTENCE_SECONDS,
+            5
+        )
+    )
+
+    while True:
+
+        try:
+
+            result = await asyncio.to_thread(
+                synchronize_incidents,
+                engine,
+                INCIDENT_CORRELATION_MINUTES
+            )
+
+            if (
+                result["created"]
+                or result["linked"]
+            ):
+
+                print(
+                    "[Phase 6.7] incident sync:",
+                    json.dumps(
+                        result
+                    )
+                )
+
+        except Exception as exc:
+
+            print(
+                "[Phase 6.7] incident sync error:",
+                exc
+            )
+
+        await asyncio.sleep(
+            INCIDENT_SYNC_SECONDS
+        )
+
+
 # =========================================================
 # APPLICATION LIFESPAN
 # =========================================================
@@ -3272,6 +3391,11 @@ async def lifespan(
     )
 
 
+    incident_sync_task = asyncio.create_task(
+        incident_sync_loop()
+    )
+
+
     risk_task = asyncio.create_task(
         risk_update_loop()
     )
@@ -3288,6 +3412,8 @@ async def lifespan(
 
     telemetry_alert_persistence_task.cancel()
 
+    incident_sync_task.cancel()
+
     risk_task.cancel()
 
 
@@ -3296,6 +3422,7 @@ async def lifespan(
         history_task,
         history_cleanup_task,
         telemetry_alert_persistence_task,
+        incident_sync_task,
         risk_task
     ]:
 
@@ -3318,12 +3445,13 @@ app = FastAPI(
         "Infrastructure Situational Awareness Platform"
     ),
 
-    version="6.6.0",
+    version="6.7.0",
 
     description=(
         "Live infrastructure monitoring with "
         "project-local sensor telemetry, sensor health alerts, "
         "historical telemetry, trend alerting, persistent alert lifecycle, "
+        "incident correlation, ownership, SRE analytics, "
         "PostGIS, USGS read-only earthquake data and WebSockets."
     ),
 
@@ -3364,7 +3492,7 @@ def root():
             "Infrastructure Situational Awareness Platform",
 
         "version":
-            "6.6.0",
+            "6.7.0",
 
         "sensor_mode":
             SENSOR_MODE,
@@ -3376,7 +3504,7 @@ def root():
             "READ_ONLY",
 
         "phase":
-            "6.6_ALERT_PERSISTENCE",
+            "6.7_INCIDENT_MANAGEMENT",
 
         "telemetry_history":
             True,
@@ -3400,6 +3528,16 @@ def root():
 
         "telemetry_alert_persistence_seconds":
             TELEMETRY_ALERT_PERSISTENCE_SECONDS,
+
+
+        "incident_management":
+            True,
+
+        "incident_sync_seconds":
+            INCIDENT_SYNC_SECONDS,
+
+        "incident_correlation_minutes":
+            INCIDENT_CORRELATION_MINUTES,
 
         "status":
             "running"
@@ -4891,6 +5029,592 @@ async def alerts_socket(
                 SENSOR_UPDATE_SECONDS
             )
 
+
+    except Exception:
+
+        pass
+
+
+
+# =========================================================
+# PHASE 6.7
+# INCIDENT MANAGEMENT API
+# =========================================================
+
+@app.get(
+    "/incidents"
+)
+def incidents_api(
+    status: str | None = Query(
+        default=None
+    ),
+
+    severity: str | None = Query(
+        default=None
+    ),
+
+    owner: str | None = Query(
+        default=None
+    ),
+
+    asset_id: int | None = Query(
+        default=None,
+        ge=1
+    ),
+
+    limit: int = Query(
+        default=100,
+        ge=1,
+        le=1000
+    )
+):
+
+    allowed_severities = {
+        "critical",
+        "high",
+        "medium",
+        "low"
+    }
+
+    if (
+        status is not None
+        and status not in INCIDENT_STATUSES
+    ):
+
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid incident status"
+        )
+
+    if (
+        severity is not None
+        and severity not in allowed_severities
+    ):
+
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid incident severity"
+        )
+
+    data = list_incidents(
+        engine,
+        status=status,
+        severity=severity,
+        owner=owner,
+        asset_id=asset_id,
+        limit=limit
+    )
+
+    return {
+        "source":
+            "LOCAL_PROJECT",
+
+        "external":
+            False,
+
+        "count":
+            len(
+                data
+            ),
+
+        "incidents":
+            data
+    }
+
+
+@app.get(
+    "/incidents/{incident_id}"
+)
+def incident_detail_api(
+    incident_id: int
+):
+
+    data = list_incidents(
+        engine,
+        limit=1000
+    )
+
+    summary = next(
+        (
+            item
+            for item in data
+            if int(
+                item["id"]
+            )
+            ==
+            incident_id
+        ),
+        None
+    )
+
+    if summary is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found"
+        )
+
+    with engine.connect() as conn:
+
+        from incident_engine import get_incident
+
+        detail = get_incident(
+            conn,
+            incident_id
+        )
+
+    return {
+        "source":
+            "LOCAL_PROJECT",
+
+        "external":
+            False,
+
+        "incident":
+            detail
+    }
+
+
+@app.get(
+    "/incidents/{incident_id}/events"
+)
+def incident_events_api(
+    incident_id: int
+):
+
+    matching = list_incidents(
+        engine,
+        limit=1000
+    )
+
+    exists = any(
+        int(
+            item["id"]
+        )
+        ==
+        incident_id
+        for item in matching
+    )
+
+    if not exists:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found"
+        )
+
+    history = load_incident_history(
+        engine,
+        incident_id
+    )
+
+    return {
+        "source":
+            "LOCAL_PROJECT",
+
+        "external":
+            False,
+
+        "incident_id":
+            incident_id,
+
+        "count":
+            len(
+                history
+            ),
+
+        "history":
+            history
+    }
+
+
+@app.post(
+    "/incidents/synchronize"
+)
+def synchronize_incidents_api():
+
+    result = synchronize_incidents(
+        engine,
+        INCIDENT_CORRELATION_MINUTES
+    )
+
+    return {
+        "message":
+            "Incident correlation completed",
+
+        **result
+    }
+
+
+@app.post(
+    "/incidents/{incident_id}/acknowledge"
+)
+def acknowledge_incident_api(
+    incident_id: int,
+    request_data: IncidentActionRequest
+):
+
+    try:
+
+        incident = update_incident_status(
+            engine,
+            incident_id=incident_id,
+            target_status="investigating",
+            changed_by=request_data.changed_by,
+            note=request_data.note
+        )
+
+    except ValueError as exc:
+
+        raise HTTPException(
+            status_code=409,
+            detail=str(
+                exc
+            )
+        )
+
+    if incident is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found"
+        )
+
+    return {
+        "message":
+            "Incident acknowledged and moved to investigating",
+
+        "source":
+            "LOCAL_PROJECT",
+
+        "external":
+            False,
+
+        "incident":
+            incident
+    }
+
+
+@app.post(
+    "/incidents/{incident_id}/assign"
+)
+def assign_incident_api(
+    incident_id: int,
+    request_data: IncidentAssignRequest
+):
+
+    try:
+
+        incident = assign_incident(
+            engine,
+            incident_id=incident_id,
+            owner=request_data.owner,
+            changed_by=request_data.changed_by,
+            note=request_data.note
+        )
+
+    except ValueError as exc:
+
+        raise HTTPException(
+            status_code=409,
+            detail=str(
+                exc
+            )
+        )
+
+    if incident is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found"
+        )
+
+    return {
+        "message":
+            "Incident owner updated",
+
+        "source":
+            "LOCAL_PROJECT",
+
+        "external":
+            False,
+
+        "incident":
+            incident
+    }
+
+
+@app.post(
+    "/incidents/{incident_id}/escalate"
+)
+def escalate_incident_api(
+    incident_id: int,
+    request_data: IncidentActionRequest
+):
+
+    try:
+
+        incident = escalate_incident(
+            engine,
+            incident_id=incident_id,
+            changed_by=request_data.changed_by,
+            note=request_data.note
+        )
+
+    except ValueError as exc:
+
+        raise HTTPException(
+            status_code=409,
+            detail=str(
+                exc
+            )
+        )
+
+    if incident is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found"
+        )
+
+    return {
+        "message":
+            "Incident severity escalated",
+
+        "source":
+            "LOCAL_PROJECT",
+
+        "external":
+            False,
+
+        "incident":
+            incident
+    }
+
+
+@app.post(
+    "/incidents/{incident_id}/mitigate"
+)
+def mitigate_incident_api(
+    incident_id: int,
+    request_data: IncidentActionRequest
+):
+
+    try:
+
+        incident = update_incident_status(
+            engine,
+            incident_id=incident_id,
+            target_status="mitigated",
+            changed_by=request_data.changed_by,
+            note=request_data.note
+        )
+
+    except ValueError as exc:
+
+        raise HTTPException(
+            status_code=409,
+            detail=str(
+                exc
+            )
+        )
+
+    if incident is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found"
+        )
+
+    return {
+        "message":
+            "Incident marked mitigated",
+
+        "source":
+            "LOCAL_PROJECT",
+
+        "external":
+            False,
+
+        "incident":
+            incident
+    }
+
+
+@app.post(
+    "/incidents/{incident_id}/resolve"
+)
+def resolve_incident_api(
+    incident_id: int,
+    request_data: IncidentActionRequest
+):
+
+    try:
+
+        incident = update_incident_status(
+            engine,
+            incident_id=incident_id,
+            target_status="resolved",
+            changed_by=request_data.changed_by,
+            note=request_data.note
+        )
+
+    except ValueError as exc:
+
+        raise HTTPException(
+            status_code=409,
+            detail=str(
+                exc
+            )
+        )
+
+    if incident is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found"
+        )
+
+    return {
+        "message":
+            "Incident resolved",
+
+        "source":
+            "LOCAL_PROJECT",
+
+        "external":
+            False,
+
+        "incident":
+            incident
+    }
+
+
+@app.post(
+    "/incidents/{incident_id}/reopen"
+)
+def reopen_incident_api(
+    incident_id: int,
+    request_data: IncidentActionRequest
+):
+
+    try:
+
+        incident = update_incident_status(
+            engine,
+            incident_id=incident_id,
+            target_status="open",
+            changed_by=request_data.changed_by,
+            note=request_data.note
+        )
+
+    except ValueError as exc:
+
+        raise HTTPException(
+            status_code=409,
+            detail=str(
+                exc
+            )
+        )
+
+    if incident is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Incident not found"
+        )
+
+    return {
+        "message":
+            "Incident reopened",
+
+        "source":
+            "LOCAL_PROJECT",
+
+        "external":
+            False,
+
+        "incident":
+            incident
+    }
+
+
+@app.get(
+    "/sre/incident-metrics"
+)
+def sre_incident_metrics_api(
+    hours: int = Query(
+        default=168,
+        ge=1,
+        le=8760
+    )
+):
+
+    return incident_metrics(
+        engine,
+        hours=hours
+    )
+
+
+# =========================================================
+# PHASE 6.7
+# INCIDENT WEBSOCKET
+# =========================================================
+
+@app.websocket(
+    "/ws/incidents"
+)
+async def incidents_socket(
+    websocket:
+        WebSocket
+):
+
+    await websocket.accept()
+
+    try:
+
+        while True:
+
+            incidents = await asyncio.to_thread(
+                list_incidents,
+                engine,
+                None,
+                None,
+                None,
+                None,
+                250
+            )
+
+            metrics = await asyncio.to_thread(
+                incident_metrics,
+                engine,
+                168
+            )
+
+            await websocket.send_json({
+
+                "type":
+                    "incidents",
+
+                "source":
+                    "LOCAL_PROJECT",
+
+                "external":
+                    False,
+
+                "incidents":
+                    incidents,
+
+                "metrics":
+                    metrics,
+
+                "generated_at":
+                    utc_now_iso()
+            })
+
+            await asyncio.sleep(
+                INCIDENT_WEBSOCKET_SECONDS
+            )
 
     except Exception:
 
