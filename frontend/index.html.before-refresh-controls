@@ -343,96 +343,6 @@
     </section>
 
 
-
-    <!-- =================================================
-         PHASE 6.5 TELEMETRY ALERTING
-    ================================================== -->
-
-    <section class="panel-section telemetry-alert-section">
-
-        <div class="section-title-row">
-
-            <div class="section-title">
-                PHASE 6.5 TELEMETRY ALERTING
-            </div>
-
-            <div
-                id="telemetryAlertStatus"
-                class="telemetry-alert-status connecting"
-            >
-                CONNECTING
-            </div>
-
-        </div>
-
-        <div class="telemetry-alert-summary">
-
-            <div class="telemetry-alert-kpi">
-                <span>Active</span>
-                <strong id="telemetryAlertTotal">0</strong>
-            </div>
-
-            <div class="telemetry-alert-kpi critical">
-                <span>Critical</span>
-                <strong id="telemetryAlertCritical">0</strong>
-            </div>
-
-            <div class="telemetry-alert-kpi high">
-                <span>High</span>
-                <strong id="telemetryAlertHigh">0</strong>
-            </div>
-
-            <div class="telemetry-alert-kpi medium">
-                <span>Medium</span>
-                <strong id="telemetryAlertMedium">0</strong>
-            </div>
-
-            <div class="telemetry-alert-kpi">
-                <span>Trend</span>
-                <strong id="telemetryTrendAlertCount">0</strong>
-            </div>
-
-            <div class="telemetry-alert-kpi">
-                <span>Assets</span>
-                <strong id="telemetryAlertAssets">0</strong>
-            </div>
-
-        </div>
-
-        <div class="telemetry-alert-filter-row">
-
-            <label for="telemetryAlertSeverity">
-                FILTER
-            </label>
-
-            <select id="telemetryAlertSeverity">
-                <option value="all">All severities</option>
-                <option value="critical">Critical</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-            </select>
-
-        </div>
-
-        <div
-            id="telemetryAlertMeta"
-            class="telemetry-alert-meta"
-        >
-            Trend window: 5 min
-        </div>
-
-        <div
-            id="telemetryAlertFeed"
-            class="telemetry-alert-feed"
-        >
-            <div class="empty-state">
-                Waiting for telemetry alert stream...
-            </div>
-        </div>
-
-    </section>
-
     <!-- =================================================
          PHASE 6.4 TELEMETRY HISTORY
     ================================================== -->
@@ -445,25 +355,11 @@
                 PHASE 6.4 TELEMETRY HISTORY
             </div>
 
-            <div class="history-live-controls">
-
-                <div
-                    id="telemetryHistoryStatus"
-                    class="history-status ready"
-                >
-                    READY
-                </div>
-
-                <button
-                    id="toggleHistoryRefresh"
-                    class="history-pause-button"
-                    type="button"
-                    aria-pressed="false"
-                    title="Pause automatic telemetry history refresh"
-                >
-                    Pause
-                </button>
-
+            <div
+                id="telemetryHistoryStatus"
+                class="history-status ready"
+            >
+                READY
             </div>
 
         </div>
@@ -504,28 +400,6 @@
             >
                 Refresh
             </button>
-
-        </div>
-
-        <div class="history-refresh-meta">
-
-            <div class="history-refresh-indicator">
-                <span
-                    id="historyRefreshDot"
-                    class="history-refresh-dot live"
-                ></span>
-
-                <span id="historyRefreshMode">
-                    Auto-refresh active
-                </span>
-            </div>
-
-            <div
-                id="historyLastUpdated"
-                class="history-last-updated"
-            >
-                Last updated: Never
-            </div>
 
         </div>
 

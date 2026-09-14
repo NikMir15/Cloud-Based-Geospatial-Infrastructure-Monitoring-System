@@ -76,29 +76,7 @@ let telemetryHistoryRecords = [];
 
 let telemetryHistoryTimer = null;
 
-let telemetryHistoryPaused = false;
-
-let telemetryHistoryLastUpdatedAt = null;
-
 const TELEMETRY_HISTORY_REFRESH_MS = 60000;
-
-
-let telemetryAlertSocket = null;
-
-let telemetryAlertData = [];
-
-let telemetryAlertSummary = {
-    total: 0,
-    critical: 0,
-    high: 0,
-    medium: 0,
-    low: 0,
-    threshold_alerts: 0,
-    trend_alerts: 0,
-    affected_assets: 0
-};
-
-let telemetryAlertWindowMinutes = 5;
 
 
 /* =========================================================
@@ -3168,543 +3146,6 @@ function showTestMessage(
 
 
 
-
-/* =========================================================
-   PHASE 6.5 TELEMETRY ALERTING
-========================================================= */
-
-function setTelemetryAlertStatus(
-    state,
-    text
-) {
-
-    const element =
-        document.getElementById(
-            "telemetryAlertStatus"
-        );
-
-    if (!element) {
-        return;
-    }
-
-    element.className =
-        `telemetry-alert-status ${state}`;
-
-    element.textContent =
-        text;
-}
-
-
-function updateTelemetryAlertSummary(
-    summary
-) {
-
-    telemetryAlertSummary = {
-        ...telemetryAlertSummary,
-        ...(summary || {})
-    };
-
-    setTextIfExists(
-        "telemetryAlertTotal",
-        telemetryAlertSummary.total || 0
-    );
-
-    setTextIfExists(
-        "telemetryAlertCritical",
-        telemetryAlertSummary.critical || 0
-    );
-
-    setTextIfExists(
-        "telemetryAlertHigh",
-        telemetryAlertSummary.high || 0
-    );
-
-    setTextIfExists(
-        "telemetryAlertMedium",
-        telemetryAlertSummary.medium || 0
-    );
-
-    setTextIfExists(
-        "telemetryTrendAlertCount",
-        telemetryAlertSummary.trend_alerts || 0
-    );
-
-    setTextIfExists(
-        "telemetryAlertAssets",
-        telemetryAlertSummary.affected_assets || 0
-    );
-
-    const meta =
-        document.getElementById(
-            "telemetryAlertMeta"
-        );
-
-    if (meta) {
-
-        meta.textContent =
-            `Trend window: ${telemetryAlertWindowMinutes} min · `
-            +
-            `${telemetryAlertSummary.threshold_alerts || 0} threshold · `
-            +
-            `${telemetryAlertSummary.trend_alerts || 0} trend`;
-    }
-}
-
-
-function renderTelemetryAlerts() {
-
-    const container =
-        document.getElementById(
-            "telemetryAlertFeed"
-        );
-
-    if (!container) {
-        return;
-    }
-
-    const severitySelect =
-        document.getElementById(
-            "telemetryAlertSeverity"
-        );
-
-    const selectedSeverity =
-        severitySelect
-            ? severitySelect.value
-            : "all";
-
-    const alerts =
-        telemetryAlertData.filter(
-            alert =>
-                selectedSeverity === "all"
-                ||
-                alert.severity
-                === selectedSeverity
-        );
-
-    if (
-        alerts.length === 0
-    ) {
-
-        container.innerHTML = `
-            <div class="empty-state">
-                No active telemetry alerts for the selected severity.
-            </div>
-        `;
-
-        return;
-    }
-
-    container.innerHTML =
-        alerts
-            .slice(
-                0,
-                25
-            )
-            .map(
-                alert => {
-
-                    const severity =
-                        escapeHtml(
-                            alert.severity
-                            || "low"
-                        );
-
-                    const kind =
-                        escapeHtml(
-                            alert.alert_kind
-                            || "threshold"
-                        );
-
-                    const latest =
-                        formatTelemetryAlertValue(
-                            alert.latest_value,
-                            alert.unit
-                        );
-
-                    const reference =
-                        alert.reference_value
-                        == null
-                            ? ""
-                            : `
-                                <span class="telemetry-alert-detail">
-                                    Start:
-                                    ${formatTelemetryAlertValue(
-                                        alert.reference_value,
-                                        alert.unit
-                                    )}
-                                </span>
-                            `;
-
-                    const delta =
-                        alert.delta
-                        == null
-                            ? ""
-                            : `
-                                <span class="telemetry-alert-detail">
-                                    Change:
-                                    ${Number(alert.delta).toFixed(2)}
-                                    ${escapeHtml(alert.unit || "")}
-                                </span>
-                            `;
-
-                    return `
-                        <button
-                            type="button"
-                            class="
-                                telemetry-alert-item
-                                severity-${severity}
-                            "
-                            onclick="focusTelemetryAlertAsset(${Number(alert.asset_id)})"
-                        >
-
-                            <div class="telemetry-alert-item-header">
-
-                                <strong>
-                                    ${escapeHtml(
-                                        String(
-                                            alert.asset_name
-                                            || `Asset ${alert.asset_id}`
-                                        )
-                                    )}
-                                </strong>
-
-                                <span
-                                    class="
-                                        telemetry-alert-severity
-                                        severity-${severity}
-                                    "
-                                >
-                                    ${severity.toUpperCase()}
-                                </span>
-
-                            </div>
-
-                            <div class="telemetry-alert-message">
-                                ${escapeHtml(
-                                    alert.message
-                                    || "Telemetry anomaly detected"
-                                )}
-                            </div>
-
-                            <div class="telemetry-alert-metric-row">
-
-                                <span>
-                                    ${escapeHtml(
-                                        alert.metric_label
-                                        || alert.metric
-                                        || "Metric"
-                                    )}
-                                </span>
-
-                                <strong>
-                                    ${latest}
-                                </strong>
-
-                            </div>
-
-                            <div class="telemetry-alert-kind-row">
-
-                                <span class="telemetry-alert-kind">
-                                    ${kind.toUpperCase()}
-                                </span>
-
-                                ${reference}
-
-                                ${delta}
-
-                            </div>
-
-                        </button>
-                    `;
-                }
-            )
-            .join("");
-}
-
-
-function formatTelemetryAlertValue(
-    value,
-    unit
-) {
-
-    const numeric =
-        Number(value);
-
-    if (!Number.isFinite(numeric)) {
-        return "--";
-    }
-
-    const absolute =
-        Math.abs(numeric);
-
-    const decimals =
-        absolute >= 100
-            ? 0
-            : absolute >= 10
-                ? 1
-                : 2;
-
-    return (
-        numeric.toFixed(decimals)
-        +
-        escapeHtml(
-            unit || ""
-        )
-    );
-}
-
-
-function focusTelemetryAlertAsset(
-    assetId
-) {
-
-    const point =
-        infrastructureData.find(
-            item =>
-                Number(item.id)
-                ===
-                Number(assetId)
-        );
-
-    if (!point) {
-        return;
-    }
-
-    selectHistoryAsset(
-        assetId,
-        true
-    );
-
-    focusAsset(
-        point.latitude,
-        point.longitude
-    );
-
-    const marker =
-        assetMarkers.get(
-            Number(assetId)
-        );
-
-    if (!marker) {
-        return;
-    }
-
-    setTimeout(
-        () => {
-
-            if (
-                clusterGroup
-                &&
-                typeof clusterGroup.zoomToShowLayer
-                === "function"
-            ) {
-
-                clusterGroup.zoomToShowLayer(
-                    marker,
-                    () => {
-                        marker.openPopup();
-                    }
-                );
-            }
-
-            else {
-                marker.openPopup();
-            }
-        },
-        450
-    );
-}
-
-
-async function loadTelemetryAlerts() {
-
-    try {
-
-        const response =
-            await fetch(
-                `${API_URL}/telemetry-alerts`
-            );
-
-        if (!response.ok) {
-
-            throw new Error(
-                "Telemetry alerts request failed"
-            );
-        }
-
-        const payload =
-            await response.json();
-
-        if (
-            payload.source
-            !== "LOCAL_PROJECT"
-            ||
-            payload.external
-            !== false
-        ) {
-
-            throw new Error(
-                "Unexpected telemetry alert source"
-            );
-        }
-
-        telemetryAlertData =
-            payload.alerts
-            || [];
-
-        telemetryAlertWindowMinutes =
-            Number(
-                payload.window_minutes
-                || 5
-            );
-
-        updateTelemetryAlertSummary(
-            payload.summary
-            || {}
-        );
-
-        renderTelemetryAlerts();
-
-        setTelemetryAlertStatus(
-            "live",
-            "LIVE"
-        );
-    }
-
-    catch (error) {
-
-        console.error(
-            "Telemetry alerts load error:",
-            error
-        );
-
-        setTelemetryAlertStatus(
-            "error",
-            "ERROR"
-        );
-    }
-}
-
-
-function connectTelemetryAlertSocket() {
-
-    telemetryAlertSocket =
-        new WebSocket(
-            `${getWebSocketBaseURL()}/ws/telemetry-alerts`
-        );
-
-    telemetryAlertSocket.onopen =
-        () => {
-
-            console.log(
-                "Telemetry alert WebSocket connected"
-            );
-
-            setTelemetryAlertStatus(
-                "live",
-                "LIVE"
-            );
-        };
-
-    telemetryAlertSocket.onmessage =
-        event => {
-
-            try {
-
-                const message =
-                    JSON.parse(
-                        event.data
-                    );
-
-                if (
-                    message.type
-                    !== "telemetry_alerts"
-                ) {
-
-                    return;
-                }
-
-                if (
-                    message.source
-                    !== "LOCAL_PROJECT"
-                    ||
-                    message.external
-                    !== false
-                ) {
-
-                    console.warn(
-                        "Rejected unexpected telemetry alert stream."
-                    );
-
-                    return;
-                }
-
-                telemetryAlertData =
-                    message.alerts
-                    || [];
-
-                telemetryAlertWindowMinutes =
-                    Number(
-                        message.window_minutes
-                        || 5
-                    );
-
-                updateTelemetryAlertSummary(
-                    message.summary
-                    || {}
-                );
-
-                renderTelemetryAlerts();
-
-                setTelemetryAlertStatus(
-                    "live",
-                    "LIVE"
-                );
-            }
-
-            catch (error) {
-
-                console.error(
-                    "Telemetry alert WebSocket message error:",
-                    error
-                );
-            }
-        };
-
-    telemetryAlertSocket.onerror =
-        error => {
-
-            console.error(
-                "Telemetry alert WebSocket error:",
-                error
-            );
-
-            setTelemetryAlertStatus(
-                "error",
-                "ERROR"
-            );
-        };
-
-    telemetryAlertSocket.onclose =
-        () => {
-
-            console.log(
-                "Telemetry alert WebSocket disconnected. Reconnecting..."
-            );
-
-            setTelemetryAlertStatus(
-                "connecting",
-                "RECONNECTING"
-            );
-
-            setTimeout(
-                connectTelemetryAlertSocket,
-                5000
-            );
-        };
-}
-
-
 /* =========================================================
    PHASE 6.4 TELEMETRY HISTORY
 ========================================================= */
@@ -3728,164 +3169,6 @@ function setTelemetryHistoryStatus(
 
     element.textContent =
         text;
-}
-
-
-
-function updateTelemetryRefreshUI() {
-
-    const button =
-        document.getElementById(
-            "toggleHistoryRefresh"
-        );
-
-    const dot =
-        document.getElementById(
-            "historyRefreshDot"
-        );
-
-    const mode =
-        document.getElementById(
-            "historyRefreshMode"
-        );
-
-    if (button) {
-
-        button.textContent =
-            telemetryHistoryPaused
-                ? "Resume"
-                : "Pause";
-
-        button.setAttribute(
-            "aria-pressed",
-            telemetryHistoryPaused
-                ? "true"
-                : "false"
-        );
-
-        button.title =
-            telemetryHistoryPaused
-                ? "Resume automatic telemetry history refresh"
-                : "Pause automatic telemetry history refresh";
-
-        button.classList.toggle(
-            "paused",
-            telemetryHistoryPaused
-        );
-    }
-
-    if (dot) {
-
-        dot.classList.toggle(
-            "live",
-            !telemetryHistoryPaused
-        );
-
-        dot.classList.toggle(
-            "paused",
-            telemetryHistoryPaused
-        );
-    }
-
-    if (mode) {
-
-        mode.textContent =
-            telemetryHistoryPaused
-                ? "Auto-refresh paused"
-                : "Auto-refresh active";
-    }
-
-    updateTelemetryLastUpdatedLabel();
-}
-
-
-function updateTelemetryLastUpdatedLabel() {
-
-    const element =
-        document.getElementById(
-            "historyLastUpdated"
-        );
-
-    if (!element) {
-        return;
-    }
-
-    if (!telemetryHistoryLastUpdatedAt) {
-
-        element.textContent =
-            "Last updated: Never";
-
-        return;
-    }
-
-    const formatted =
-        telemetryHistoryLastUpdatedAt
-            .toLocaleTimeString(
-                [],
-                {
-                    hour:
-                        "2-digit",
-
-                    minute:
-                        "2-digit",
-
-                    second:
-                        "2-digit"
-                }
-            );
-
-    element.textContent =
-        `Last updated: ${formatted}`;
-}
-
-
-function toggleTelemetryHistoryRefresh() {
-
-    telemetryHistoryPaused =
-        !telemetryHistoryPaused;
-
-    if (
-        telemetryHistoryPaused
-    ) {
-
-        if (
-            telemetryHistoryTimer
-            != null
-        ) {
-
-            clearInterval(
-                telemetryHistoryTimer
-            );
-
-            telemetryHistoryTimer =
-                null;
-        }
-
-        setTelemetryHistoryStatus(
-            "paused",
-            "PAUSED"
-        );
-    }
-
-    else {
-
-        startTelemetryHistoryRefresh();
-
-        setTelemetryHistoryStatus(
-            "ready",
-            "LIVE"
-        );
-
-        if (
-            selectedHistoryAssetId
-            != null
-        ) {
-
-            loadTelemetryHistory();
-        }
-    }
-
-    updateTelemetryRefreshUI();
 }
 
 
@@ -4042,28 +3325,10 @@ async function loadTelemetryHistory() {
             summaryPayload.summary || {}
         );
 
-        telemetryHistoryLastUpdatedAt =
-            new Date();
-
-        updateTelemetryLastUpdatedLabel();
-
-        if (
-            telemetryHistoryPaused
-        ) {
-
-            setTelemetryHistoryStatus(
-                "paused",
-                "PAUSED"
-            );
-        }
-
-        else {
-
-            setTelemetryHistoryStatus(
-                "ready",
-                "LIVE"
-            );
-        }
+        setTelemetryHistoryStatus(
+            "ready",
+            "LIVE"
+        );
 
     }
 
@@ -4708,30 +3973,11 @@ function startTelemetryHistoryRefresh() {
         clearInterval(
             telemetryHistoryTimer
         );
-
-        telemetryHistoryTimer =
-            null;
-    }
-
-    if (
-        telemetryHistoryPaused
-    ) {
-
-        updateTelemetryRefreshUI();
-
-        return;
     }
 
     telemetryHistoryTimer =
         setInterval(
             () => {
-
-                if (
-                    telemetryHistoryPaused
-                ) {
-
-                    return;
-                }
 
                 if (
                     selectedHistoryAssetId
@@ -4743,8 +3989,6 @@ function startTelemetryHistoryRefresh() {
             },
             TELEMETRY_HISTORY_REFRESH_MS
         );
-
-    updateTelemetryRefreshUI();
 }
 
 
@@ -5615,8 +4859,7 @@ async function refreshDashboard() {
             loadRisk(),
             loadAnalytics(),
             loadEarthquakes(),
-            loadTestEventStatus(),
-            loadTelemetryAlerts()
+            loadTestEventStatus()
         ]
     );
 
@@ -5871,18 +5114,6 @@ window.addEventListener(
             );
 
 
-        const toggleHistoryRefreshButton =
-            document.getElementById(
-                "toggleHistoryRefresh"
-            );
-
-
-        const telemetryAlertSeverity =
-            document.getElementById(
-                "telemetryAlertSeverity"
-            );
-
-
         if (searchBox) {
 
             searchBox.addEventListener(
@@ -5992,32 +5223,12 @@ window.addEventListener(
         }
 
 
-        if (toggleHistoryRefreshButton) {
-
-            toggleHistoryRefreshButton.addEventListener(
-                "click",
-                toggleTelemetryHistoryRefresh
-            );
-        }
-
-
-        if (telemetryAlertSeverity) {
-
-            telemetryAlertSeverity.addEventListener(
-                "change",
-                renderTelemetryAlerts
-            );
-        }
-
-
         /*
             Initial REST load
         */
 
         await refreshDashboard();
 
-
-        updateTelemetryRefreshUI();
 
         startTelemetryHistoryRefresh();
 
@@ -6029,8 +5240,6 @@ window.addEventListener(
         connectSensorSocket();
 
         connectAlertSocket();
-
-        connectTelemetryAlertSocket();
 
         connectLocationSocket();
 
@@ -6059,11 +5268,6 @@ window.addEventListener(
 
         console.log(
             "Telemetry history: PostgreSQL persisted, 60-second refresh"
-        );
-
-
-        console.log(
-            "Phase 6.5 telemetry alerting: threshold + trend detection"
         );
     }
 );
