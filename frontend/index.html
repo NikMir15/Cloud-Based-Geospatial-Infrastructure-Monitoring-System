@@ -114,7 +114,7 @@
             </div>
 
             <div class="version-label">
-                v6.6.0
+                v6.7.0
             </div>
         </div>
 
@@ -566,44 +566,36 @@
                     id="telemetryCharts"
                     class="telemetry-charts hidden"
                 >
-                    <div class="telemetry-chart-card primary-chart">
-                        <div class="telemetry-chart-header">
-                            <span>Health</span>
+                    <div class="telemetry-chart-card primary-chart command-chart-card">
+                        <div class="telemetry-chart-header command-chart-header">
+                            <div>
+                                <span>Telemetry Trends</span>
+                                <small>Normalized live history</small>
+                            </div>
+
+                            <div class="telemetry-chart-legend">
+                                <span><i class="legend-cpu"></i>CPU</span>
+                                <span><i class="legend-health"></i>Health</span>
+                                <span><i class="legend-temp"></i>Temp</span>
+                                <span><i class="legend-latency"></i>Latency</span>
+                                <span><i class="legend-loss"></i>Packet Loss</span>
+                            </div>
+                        </div>
+
+                        <div id="healthHistoryChart" class="telemetry-chart command-multi-chart"></div>
+
+                        <!-- compatibility nodes retained for existing Phase 6.4 code -->
+                        <div class="compatibility-nodes" aria-hidden="true">
                             <strong id="historyHealthLatest">--</strong>
-                        </div>
-                        <div id="healthHistoryChart" class="telemetry-chart"></div>
-                    </div>
-
-                    <div class="telemetry-chart-card">
-                        <div class="telemetry-chart-header">
-                            <span>CPU</span>
                             <strong id="historyCpuLatest">--</strong>
-                        </div>
-                        <div id="cpuHistoryChart" class="telemetry-chart"></div>
-                    </div>
-
-                    <div class="telemetry-chart-card">
-                        <div class="telemetry-chart-header">
-                            <span>Temperature</span>
                             <strong id="historyTempLatest">--</strong>
-                        </div>
-                        <div id="temperatureHistoryChart" class="telemetry-chart"></div>
-                    </div>
-
-                    <div class="telemetry-chart-card">
-                        <div class="telemetry-chart-header">
-                            <span>Latency</span>
                             <strong id="historyLatencyLatest">--</strong>
-                        </div>
-                        <div id="latencyHistoryChart" class="telemetry-chart"></div>
-                    </div>
-
-                    <div class="telemetry-chart-card">
-                        <div class="telemetry-chart-header">
-                            <span>Packet Loss</span>
                             <strong id="historyPacketLossLatest">--</strong>
+                            <div id="cpuHistoryChart"></div>
+                            <div id="temperatureHistoryChart"></div>
+                            <div id="latencyHistoryChart"></div>
+                            <div id="packetLossHistoryChart"></div>
                         </div>
-                        <div id="packetLossHistoryChart" class="telemetry-chart"></div>
                     </div>
                 </div>
 
@@ -981,7 +973,7 @@
 
 
         <footer class="dashboard-footer">
-            GeoInfra · Phase 6.6 · Local telemetry + PostgreSQL alert lifecycle
+            GeoInfra · Phase 6.7 · Incident Management + SRE Analytics
         </footer>
 
     </main>

@@ -2241,3 +2241,1087 @@ input {
         grid-column: auto;
     }
 }
+
+
+/* =========================================================
+   PHASE 6.7 — ALIGNMENT + READABILITY OVERRIDES
+   These rules intentionally come last.
+========================================================= */
+
+:root {
+    --content-gap: 14px;
+    --card-pad: 14px;
+}
+
+/* Overall proportions */
+.main-area {
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+.dashboard-section {
+    margin-top: 14px;
+}
+
+.page-heading {
+    min-height: 72px;
+    align-items: center;
+}
+
+.page-heading h1 {
+    font-size: clamp(24px, 1.55vw, 34px);
+}
+
+.page-heading p:not(.eyebrow) {
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+/* Topbar */
+.topbar {
+    min-height: 72px;
+}
+
+.global-search {
+    max-width: 760px;
+}
+
+/* KPI cards */
+.hero-kpi-grid {
+    align-items: stretch;
+}
+
+.hero-kpi {
+    min-height: 108px;
+}
+
+.hero-kpi-copy span {
+    font-size: 10px;
+}
+
+.hero-kpi-copy strong {
+    font-size: 27px;
+}
+
+.hero-kpi-copy small {
+    font-size: 8px;
+}
+
+/* Main two-column workspace */
+.workspace-grid {
+    align-items: stretch;
+    grid-template-columns: minmax(0, 2.25fr) minmax(340px, 0.9fr);
+}
+
+.map-card,
+.right-stack {
+    min-height: 0;
+}
+
+.map-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.map-stage {
+    flex: 1 1 auto;
+    min-height: 420px;
+    height: min(47vh, 525px);
+}
+
+.right-stack {
+    grid-template-rows: minmax(330px, 1.35fr) minmax(250px, 0.65fr);
+}
+
+.telemetry-alert-section,
+.health-overview-card {
+    height: 100%;
+}
+
+/* Remove floating legend overlap; the dashboard already has map status/filter UI */
+.map-legend {
+    display: none !important;
+}
+
+/* Recent alerts: prevent native white button rendering */
+.telemetry-alert-feed {
+    min-height: 0;
+    max-height: 100%;
+    overflow-y: auto;
+}
+
+.telemetry-alert-item {
+    width: 100%;
+    display: block;
+    padding: 10px 11px;
+    cursor: pointer;
+    text-align: left;
+    color: #dcecf7;
+    border: 1px solid rgba(120, 160, 200, 0.10);
+    border-left: 3px solid rgba(120, 160, 200, 0.28);
+    border-radius: 9px;
+    background:
+        linear-gradient(145deg, rgba(17, 36, 58, 0.86), rgba(8, 23, 39, 0.92));
+    box-shadow: none;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.telemetry-alert-item:hover {
+    transform: translateY(-1px);
+    border-color: rgba(52, 186, 255, 0.24);
+    background:
+        linear-gradient(145deg, rgba(21, 43, 68, 0.94), rgba(10, 28, 47, 0.96));
+}
+
+.telemetry-alert-item.severity-critical {
+    border-left-color: var(--red);
+}
+
+.telemetry-alert-item.severity-high {
+    border-left-color: var(--orange);
+}
+
+.telemetry-alert-item.severity-medium {
+    border-left-color: var(--yellow);
+}
+
+.telemetry-alert-item.severity-low {
+    border-left-color: var(--green);
+}
+
+.telemetry-alert-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.telemetry-alert-item-header strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #f1f8fc;
+    font-size: 10px;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.telemetry-alert-severity {
+    flex: 0 0 auto;
+    padding: 3px 6px;
+    border-radius: 999px;
+    font-size: 7px;
+    font-weight: 900;
+    letter-spacing: 0.35px;
+}
+
+.telemetry-alert-severity.severity-critical {
+    color: #ff9aac;
+    border: 1px solid rgba(255,77,103,.24);
+    background: rgba(255,77,103,.09);
+}
+
+.telemetry-alert-severity.severity-high {
+    color: #ffb17e;
+    border: 1px solid rgba(255,147,72,.24);
+    background: rgba(255,147,72,.09);
+}
+
+.telemetry-alert-severity.severity-medium {
+    color: #ffe08a;
+    border: 1px solid rgba(255,200,74,.24);
+    background: rgba(255,200,74,.08);
+}
+
+.telemetry-alert-severity.severity-low {
+    color: #87f6c8;
+    border: 1px solid rgba(31,232,162,.22);
+    background: rgba(31,232,162,.07);
+}
+
+.telemetry-alert-message {
+    margin-top: 5px;
+    color: #91a8ba;
+    font-size: 8px;
+    line-height: 1.35;
+}
+
+.telemetry-alert-metric-row,
+.telemetry-alert-kind-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    color: #657f93;
+    font-size: 7px;
+}
+
+.telemetry-alert-metric-row {
+    justify-content: space-between;
+}
+
+.telemetry-alert-metric-row strong {
+    color: #e6f6ff;
+    font-size: 8px;
+}
+
+.telemetry-alert-kind-row {
+    flex-wrap: wrap;
+}
+
+.telemetry-alert-kind,
+.telemetry-alert-detail {
+    padding: 2px 5px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.035);
+}
+
+/* Health card alignment */
+.health-ring-wrap {
+    min-height: 180px;
+    grid-template-columns: 150px minmax(0, 1fr);
+}
+
+.health-breakdown > div {
+    font-size: 8px;
+}
+
+/* Telemetry area */
+.analytics-grid {
+    align-items: stretch;
+    grid-template-columns: minmax(0, 2.15fr) minmax(330px, 0.85fr);
+}
+
+.telemetry-history-section,
+.sensor-health-section {
+    overflow: hidden;
+}
+
+.telemetry-controls {
+    grid-template-columns: minmax(240px, 1fr) 150px auto;
+}
+
+/* Fix SVG telemetry charts */
+.telemetry-charts {
+    align-items: stretch;
+}
+
+.telemetry-chart-card {
+    min-height: 175px;
+}
+
+.telemetry-chart-card.primary-chart {
+    min-height: 220px;
+}
+
+.telemetry-chart {
+    width: 100%;
+    height: 140px;
+    min-height: 140px;
+    overflow: hidden;
+}
+
+.primary-chart .telemetry-chart {
+    height: 180px;
+    min-height: 180px;
+}
+
+.telemetry-svg-chart {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    overflow: visible;
+}
+
+.telemetry-svg-chart .chart-grid-line {
+    stroke: rgba(105, 139, 170, 0.14);
+    stroke-width: 0.7;
+    vector-effect: non-scaling-stroke;
+}
+
+.telemetry-svg-chart .chart-area {
+    fill: rgba(33, 200, 255, 0.08);
+    stroke: none;
+}
+
+.telemetry-svg-chart .chart-line {
+    fill: none;
+    stroke: #21c8ff;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+    filter: drop-shadow(0 0 3px rgba(33,200,255,.28));
+}
+
+.telemetry-chart-card:nth-child(3) .chart-line {
+    stroke: #1fe8a2;
+}
+
+.telemetry-chart-card:nth-child(4) .chart-line {
+    stroke: #a75cff;
+}
+
+.telemetry-chart-card:nth-child(5) .chart-line {
+    stroke: #ffc84a;
+}
+
+.telemetry-chart-card:nth-child(6) .chart-line {
+    stroke: #ff6c8e;
+}
+
+.telemetry-svg-chart .chart-latest-point {
+    fill: #ffffff;
+    stroke: #21c8ff;
+    stroke-width: 1.2;
+    vector-effect: non-scaling-stroke;
+}
+
+.telemetry-svg-chart .chart-axis-label {
+    fill: #6d8599;
+    font-size: 5px !important;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
+    dominant-baseline: middle;
+}
+
+.chart-empty-state {
+    display: grid;
+    place-items: center;
+    height: 100%;
+    color: #60798d;
+    font-size: 8px;
+}
+
+/* Sensor alert cards */
+.alert-card {
+    width: 100%;
+    display: block;
+    padding: 10px !important;
+    color: #dcebf5;
+    text-align: left;
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid rgba(255,255,255,.06) !important;
+    border-left: 3px solid rgba(100, 145, 190, .28) !important;
+    background:
+        linear-gradient(145deg, rgba(14,31,51,.82), rgba(7,21,35,.88)) !important;
+}
+
+.alert-card.critical {
+    border-left-color: var(--red) !important;
+}
+
+.alert-card.high {
+    border-left-color: var(--orange) !important;
+}
+
+.alert-card.medium {
+    border-left-color: var(--yellow) !important;
+}
+
+.alert-card.low {
+    border-left-color: var(--green) !important;
+}
+
+.alert-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.alert-asset-name {
+    color: #f0f8fd;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.alert-type-name {
+    margin-top: 2px;
+    color: #657d91;
+    font-size: 7px;
+}
+
+.severity {
+    padding: 3px 6px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    font-size: 7px;
+    font-weight: 900;
+}
+
+.severity.critical {
+    color: #ff97aa;
+    background: rgba(255,77,103,.09);
+}
+
+.severity.high {
+    color: #ffaf7a;
+    background: rgba(255,147,72,.09);
+}
+
+.severity.medium {
+    color: #ffdc7c;
+    background: rgba(255,200,74,.08);
+}
+
+.severity.low {
+    color: #81f1c1;
+    background: rgba(31,232,162,.07);
+}
+
+.alert-message {
+    margin-top: 7px;
+    color: #8fa5b6;
+    font-size: 8px;
+    line-height: 1.4;
+}
+
+.alert-metric {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 7px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255,255,255,.045);
+    color: #60798d;
+    font-size: 7px;
+}
+
+.alert-metric strong {
+    color: #d8ebf7;
+    font-size: 8px;
+}
+
+/* Alert Lifecycle section */
+.lifecycle-grid {
+    align-items: stretch;
+    grid-template-columns: minmax(0, 2.2fr) minmax(320px, 0.8fr);
+}
+
+.persisted-alert-section,
+.operational-summary {
+    height: 100%;
+}
+
+.persisted-alert-feed {
+    max-height: 520px;
+}
+
+.persisted-alert-controls {
+    grid-template-columns: 1fr 1fr minmax(150px, 1fr) auto;
+}
+
+/* Lower analytics row */
+.lower-grid {
+    align-items: stretch;
+    grid-template-columns: 0.95fr 1.15fr 1.15fr;
+}
+
+.lower-grid .glass-card {
+    min-height: 285px;
+    overflow: hidden;
+}
+
+/* Infrastructure type renderer */
+.type-stats-modern {
+    display: grid;
+    gap: 7px;
+}
+
+.type-stat {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 9px;
+    border: 1px solid rgba(255,255,255,.05);
+    border-radius: 8px;
+    background: rgba(255,255,255,.018);
+}
+
+.type-stat-name {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    color: #9eb2c1;
+    font-size: 8px;
+    text-transform: capitalize;
+}
+
+.type-color-dot {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    box-shadow: 0 0 8px currentColor;
+}
+
+.type-stat-count {
+    min-width: 24px;
+    text-align: right;
+    color: #eef8ff;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+/* Event/risk feed cards */
+.event-feed {
+    max-height: 330px;
+    overflow-y: auto;
+    padding: 0 12px 12px;
+}
+
+.event-item,
+.risk-item {
+    display: block;
+    padding: 9px 10px !important;
+    margin-bottom: 7px;
+    color: #d7e8f3;
+    border: 1px solid rgba(255,255,255,.055) !important;
+    border-radius: 9px !important;
+    background:
+        linear-gradient(145deg, rgba(14,30,49,.74), rgba(7,20,34,.80)) !important;
+}
+
+.event-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.event-title {
+    color: #eaf6fc;
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.event-type,
+.event-description {
+    margin-top: 5px;
+    color: #748da0;
+    font-size: 7px;
+    line-height: 1.4;
+}
+
+/* Test mode */
+.test-form-grid {
+    grid-template-columns: minmax(250px, 1fr) 120px 120px auto auto;
+}
+
+/* Give all cards consistent internal spacing/height */
+.glass-card {
+    overflow: hidden;
+}
+
+.card-heading {
+    min-height: 58px;
+}
+
+.card-heading h2 {
+    font-size: 14px;
+}
+
+/* Desktop 1440p/large-screen tuning */
+@media (min-width: 1600px) {
+    .main-area {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+    .workspace-grid {
+        grid-template-columns: minmax(0, 2.35fr) minmax(360px, .9fr);
+    }
+
+    .map-stage {
+        height: min(48vh, 540px);
+    }
+
+    .telemetry-alert-feed {
+        max-height: 360px;
+    }
+
+    .right-stack {
+        grid-template-rows: minmax(360px, 1.35fr) minmax(255px, .65fr);
+    }
+}
+
+/* Laptop fallback */
+@media (max-width: 1360px) {
+    .workspace-grid,
+    .analytics-grid,
+    .lifecycle-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .right-stack {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto;
+    }
+
+    .lower-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .lower-grid > :last-child {
+        grid-column: 1 / -1;
+    }
+}
+
+
+/* =========================================================
+   PHASE 6.7 COMMAND CENTER — FINAL VISUAL SYSTEM
+   Matches the approved GeoInfra command-center mockup.
+========================================================= */
+
+html, body {
+    background: #020914 !important;
+}
+
+body {
+    min-width: 1180px;
+}
+
+.app-shell {
+    background:
+        radial-gradient(circle at 58% 0%, rgba(16, 74, 126, .10), transparent 32%),
+        #020914;
+}
+
+.sidebar {
+    width: var(--sidebar-width);
+    background:
+        linear-gradient(180deg, rgba(5, 16, 31, .99), rgba(3, 12, 24, .99)) !important;
+    border-right: 1px solid #102b42 !important;
+}
+
+.main-area {
+    background:
+        radial-gradient(circle at 70% 0%, rgba(13, 96, 156, .08), transparent 30%),
+        #030c18 !important;
+}
+
+.topbar {
+    background: rgba(3, 12, 24, .96) !important;
+    border-bottom: 1px solid #10283d !important;
+}
+
+.glass-card,
+.hero-kpi {
+    background:
+        linear-gradient(145deg, rgba(7, 25, 43, .96), rgba(4, 17, 31, .97)) !important;
+    border-color: rgba(40, 128, 183, .30) !important;
+    box-shadow:
+        0 14px 38px rgba(0,0,0,.24),
+        inset 0 1px 0 rgba(255,255,255,.018) !important;
+}
+
+.page-heading {
+    padding-top: 8px;
+}
+
+.hero-kpi-grid {
+    gap: 12px;
+}
+
+.hero-kpi {
+    min-height: 102px !important;
+}
+
+.workspace-grid {
+    grid-template-columns: minmax(0, 2.2fr) minmax(360px, .88fr) !important;
+    gap: 14px !important;
+}
+
+.map-card {
+    min-height: 0 !important;
+}
+
+.map-stage {
+    height: 390px !important;
+    min-height: 390px !important;
+    margin: 0 11px !important;
+    border-color: rgba(30, 146, 212, .32) !important;
+    background: #020b16 !important;
+}
+
+#map {
+    background: #020b16 !important;
+}
+
+.leaflet-tile-pane {
+    filter: none !important;
+    opacity: .88 !important;
+}
+
+.leaflet-overlay-pane,
+.leaflet-marker-pane {
+    filter: saturate(1.12) contrast(1.05);
+}
+
+/* ensure no floating legend is allowed to overlap */
+.map-legend {
+    display: none !important;
+}
+
+/* right-side stack proportions */
+.right-stack {
+    grid-template-rows: 355px 255px !important;
+    gap: 14px !important;
+}
+
+.telemetry-alert-section,
+.health-overview-card {
+    min-height: 0 !important;
+    height: 100% !important;
+}
+
+/* Recent alerts: force a real dark card appearance */
+.telemetry-alert-feed {
+    gap: 6px !important;
+    max-height: 250px !important;
+    overflow-y: auto !important;
+}
+
+.telemetry-alert-feed button,
+.telemetry-alert-item,
+button.telemetry-alert-item {
+    all: unset !important;
+    box-sizing: border-box !important;
+    display: block !important;
+    width: 100% !important;
+    cursor: pointer !important;
+    padding: 10px 11px !important;
+    color: #dbeaf5 !important;
+    border: 1px solid rgba(87, 131, 169, .17) !important;
+    border-left: 3px solid #21c8ff !important;
+    border-radius: 9px !important;
+    background:
+        linear-gradient(145deg, rgba(16, 34, 55, .96), rgba(7, 22, 38, .98)) !important;
+    box-shadow: none !important;
+    font: inherit !important;
+    text-align: left !important;
+}
+
+.telemetry-alert-feed button:hover,
+.telemetry-alert-item:hover {
+    background:
+        linear-gradient(145deg, rgba(19, 41, 65, .98), rgba(9, 27, 46, .99)) !important;
+    border-color: rgba(54, 179, 239, .32) !important;
+}
+
+.telemetry-alert-item.severity-critical {
+    border-left-color: #ff4f68 !important;
+}
+
+.telemetry-alert-item.severity-high {
+    border-left-color: #ff9b42 !important;
+}
+
+.telemetry-alert-item.severity-medium {
+    border-left-color: #ffc94c !important;
+}
+
+.telemetry-alert-item.severity-low {
+    border-left-color: #27e7a4 !important;
+}
+
+.telemetry-alert-item-header strong {
+    color: #f0f8fd !important;
+}
+
+.telemetry-alert-message {
+    color: #8097aa !important;
+}
+
+.telemetry-alert-metric-row strong {
+    color: #dff3ff !important;
+}
+
+/* Infrastructure health */
+.health-ring-wrap {
+    grid-template-columns: 150px 1fr !important;
+    min-height: 175px !important;
+    padding-top: 0 !important;
+}
+
+.health-ring {
+    width: 120px !important;
+    height: 120px !important;
+}
+
+/* Telemetry command chart */
+.analytics-grid {
+    grid-template-columns: minmax(0, 2.15fr) minmax(350px, .85fr) !important;
+    gap: 14px !important;
+}
+
+.telemetry-history-section {
+    min-height: 430px !important;
+}
+
+.telemetry-charts {
+    display: block !important;
+    padding: 0 14px 14px !important;
+}
+
+.telemetry-charts.hidden {
+    display: none !important;
+}
+
+.command-chart-card {
+    min-height: 245px !important;
+    padding: 10px 12px 12px !important;
+    border: 1px solid rgba(42, 123, 177, .17) !important;
+    background:
+        linear-gradient(180deg, rgba(5, 21, 37, .92), rgba(3, 15, 28, .95)) !important;
+}
+
+.command-chart-header {
+    align-items: flex-start !important;
+    margin-bottom: 7px !important;
+}
+
+.command-chart-header > div:first-child {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.command-chart-header small {
+    color: #5e768a;
+    font-size: 7px;
+}
+
+.telemetry-chart-legend {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px 12px;
+    color: #7f95a8;
+    font-size: 7px;
+}
+
+.telemetry-chart-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.telemetry-chart-legend i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+
+.legend-cpu { background: #25c8ff; box-shadow: 0 0 8px rgba(37,200,255,.55); }
+.legend-health { background: #28e4a3; box-shadow: 0 0 8px rgba(40,228,163,.50); }
+.legend-temp { background: #ffb547; }
+.legend-latency { background: #a96cff; }
+.legend-loss { background: #ff5b78; }
+
+.command-multi-chart {
+    width: 100% !important;
+    height: 205px !important;
+    min-height: 205px !important;
+    overflow: hidden !important;
+    border-radius: 8px;
+    background:
+        linear-gradient(180deg, rgba(8, 28, 46, .30), rgba(2, 13, 25, .06));
+}
+
+.compatibility-nodes {
+    display: none !important;
+}
+
+/* kill old black SVG behaviors completely */
+.telemetry-svg-chart,
+.telemetry-svg-chart *,
+.telemetry-chart svg,
+.telemetry-chart svg * {
+    color: inherit;
+}
+
+/* Sensor health cards on right */
+.sensor-health-section {
+    min-height: 430px !important;
+}
+
+.alert-feed {
+    max-height: 265px !important;
+}
+
+.alert-feed button,
+.alert-card,
+button.alert-card {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    color: #dcebf5 !important;
+    background:
+        linear-gradient(145deg, rgba(15, 32, 52, .96), rgba(7, 21, 36, .98)) !important;
+}
+
+/* lifecycle */
+.lifecycle-grid {
+    grid-template-columns: minmax(0, 2.15fr) minmax(320px, .75fr) !important;
+    gap: 14px !important;
+}
+
+/* lower cards */
+.lower-grid {
+    grid-template-columns: .85fr 1.05fr 1.10fr !important;
+}
+
+.type-stats-modern {
+    max-height: 310px;
+    overflow-y: auto;
+}
+
+/* Consistent typography */
+.card-heading h2,
+.page-heading h1,
+.hero-kpi-copy strong {
+    text-rendering: geometricPrecision;
+}
+
+.event-feed,
+.risk-feed,
+.alert-feed,
+.telemetry-alert-feed,
+.persisted-alert-feed {
+    scrollbar-width: thin;
+}
+
+/* Large desktop target matching generated reference */
+@media (min-width: 1500px) {
+    :root {
+        --sidebar-width: 205px;
+    }
+
+    .main-area {
+        padding-left: 17px !important;
+        padding-right: 17px !important;
+    }
+
+    .workspace-grid {
+        grid-template-columns: minmax(0, 2.22fr) minmax(370px, .88fr) !important;
+    }
+
+    .map-stage {
+        height: 410px !important;
+        min-height: 410px !important;
+    }
+
+    .right-stack {
+        grid-template-rows: 365px 255px !important;
+    }
+}
+
+
+
+/* =========================================================
+   MAP FIX — NO API KEY / DARK OSM
+   Keep these rules LAST so they override earlier map styles.
+========================================================= */
+
+#map,
+.leaflet-container {
+    background:
+        radial-gradient(
+            circle at 50% 46%,
+            rgba(12, 49, 74, 0.28),
+            rgba(2, 9, 18, 0.96) 72%
+        ) !important;
+}
+
+/*
+   Standard OpenStreetMap tiles are converted to the
+   dashboard's dark navy visual language in the browser.
+   This avoids third-party dark tile providers that can
+   display "API KEY REQUIRED" overlays.
+*/
+.leaflet-tile-pane {
+    filter:
+        invert(100%)
+        hue-rotate(180deg)
+        brightness(49%)
+        contrast(118%)
+        saturate(72%) !important;
+
+    opacity: 0.92 !important;
+}
+
+/* Infrastructure markers must keep their original colors. */
+.leaflet-marker-pane,
+.leaflet-shadow-pane,
+.leaflet-overlay-pane,
+.leaflet-tooltip-pane,
+.leaflet-popup-pane {
+    filter: none !important;
+}
+
+/* Slightly dim base-map imagery so markers remain dominant. */
+.leaflet-tile {
+    mix-blend-mode: normal !important;
+}
+
+/* Clean attribution to match the command center. */
+.leaflet-control-attribution {
+    padding: 2px 6px !important;
+    border-radius: 6px 0 0 0 !important;
+    background: rgba(3, 13, 24, 0.78) !important;
+    color: #60788d !important;
+    font-size: 7px !important;
+    backdrop-filter: blur(8px);
+}
+
+.leaflet-control-attribution a {
+    color: #6fcfff !important;
+}
+
+/* Keep zoom buttons consistent with the dashboard. */
+.leaflet-control-zoom {
+    border: 1px solid rgba(37, 177, 241, 0.22) !important;
+    border-radius: 9px !important;
+    overflow: hidden !important;
+    box-shadow:
+        0 8px 26px rgba(0, 0, 0, 0.36),
+        0 0 18px rgba(26, 155, 226, 0.07) !important;
+}
+
+.leaflet-control-zoom a {
+    width: 32px !important;
+    height: 32px !important;
+    line-height: 32px !important;
+    color: #e8f8ff !important;
+    background: rgba(7, 26, 44, 0.94) !important;
+    border-bottom-color: rgba(255,255,255,0.06) !important;
+}
+
+.leaflet-control-zoom a:hover {
+    color: #ffffff !important;
+    background: rgba(18, 61, 92, 0.96) !important;
+}
+
+/* Prevent duplicate world copies at low zoom. */
+.leaflet-tile-container {
+    will-change: transform;
+}
+
+
+
+/* =========================================================
+   SENSOR ALERT SOURCE CLEANUP
+   Source validation remains in JavaScript/backend, but the
+   internal LOCAL_PROJECT marker is not shown in the UI.
+========================================================= */
+
+.alert-source-row {
+    display: none !important;
+}
+

@@ -333,9 +333,12 @@ function initMap() {
 
 
     /*
-        OpenStreetMap basemap.
+        OpenStreetMap standard raster basemap.
 
-        No CARTO API key is required.
+        This endpoint does NOT require an API key.
+        The dark command-center appearance is applied
+        using CSS only, so the map remains stable and
+        does not display provider API-key watermarks.
     */
 
     L.tileLayer(
@@ -348,7 +351,7 @@ function initMap() {
                 19,
 
             noWrap:
-                false,
+                true,
 
             attribution:
                 "&copy; OpenStreetMap contributors"
@@ -370,8 +373,19 @@ function initMap() {
                 spiderfyOnMaxZoom:
                     true,
 
+                /*
+                    Phase 6.7 command-center view:
+                    show every infrastructure marker individually.
+
+                    The map's minimum zoom is 2, so disabling
+                    clustering at zoom 2 removes the numeric
+                    cluster bubbles (for example 23, 18, 6)
+                    at every usable zoom level while keeping
+                    MarkerClusterGroup compatibility for the
+                    existing focus/zoom functions.
+                */
                 disableClusteringAtZoom:
-                    12,
+                    2,
 
                 iconCreateFunction:
                     createClusterIcon
@@ -5384,65 +5398,470 @@ function renderTelemetryHistory(
         )
     );
 
-    renderTelemetryLineChart(
+    renderTelemetryMultiSeriesChart(
         "healthHistoryChart",
-        chronological,
-        "health",
-        {
-            min: 0,
-            max: 100,
-            decimals: 0,
-            suffix: "%"
-        }
-    );
-
-    renderTelemetryLineChart(
-        "cpuHistoryChart",
-        chronological,
-        "cpu_percent",
-        {
-            min: 0,
-            max: 100,
-            decimals: 1,
-            suffix: "%"
-        }
-    );
-
-    renderTelemetryLineChart(
-        "temperatureHistoryChart",
-        chronological,
-        "temperature_c",
-        {
-            decimals: 1,
-            suffix: "°C",
-            padding: 4
-        }
-    );
-
-    renderTelemetryLineChart(
-        "latencyHistoryChart",
-        chronological,
-        "latency_ms",
-        {
-            min: 0,
-            decimals: 1,
-            suffix: " ms",
-            padding: 10
-        }
-    );
-
-    renderTelemetryLineChart(
-        "packetLossHistoryChart",
-        chronological,
-        "packet_loss_percent",
-        {
-            min: 0,
-            decimals: 2,
-            suffix: "%",
-            padding: 0.5
-        }
+        chronological
     );
 }
+
+
+function renderTelemetryMultiSeriesChart(
+    containerId,
+    records
+) {
+
+    const container =
+        document.getElementById(
+            containerId
+        );
+
+    if (!container) {
+        return;
+    }
+
+    const source =
+        Array.isArray(records)
+            ? records.filter(
+                item =>
+                    item
+                    &&
+                    item.recorded_at
+            )
+            : [];
+
+    if (source.length < 2) {
+
+        container.innerHTML = `
+            <div class="chart-empty-state">
+                Waiting for enough historical samples...
+            </div>
+        `;
+
+        return;
+    }
+
+    const width = 1000;
+    const height = 245;
+
+    const padding = {
+        left: 48,
+        right: 18,
+        top: 16,
+        bottom: 32
+    };
+
+    const plotWidth =
+        width
+        -
+        padding.left
+        -
+        padding.right;
+
+    const plotHeight =
+        height
+        -
+        padding.top
+        -
+        padding.bottom;
+
+    const metricDefinitions = [
+        {
+            key: "cpu_percent",
+            label: "CPU",
+            color: "#25c8ff",
+            min: 0,
+            max: 100
+        },
+        {
+            key: "health",
+            label: "Health",
+            color: "#28e4a3",
+            min: 0,
+            max: 100
+        },
+        {
+            key: "temperature_c",
+            label: "Temperature",
+            color: "#ffb547"
+        },
+        {
+            key: "latency_ms",
+            label: "Latency",
+            color: "#a96cff"
+        },
+        {
+            key: "packet_loss_percent",
+            label: "Packet Loss",
+            color: "#ff5b78"
+        }
+    ];
+
+    function finiteValues(metric) {
+
+        return source
+            .map(
+                row =>
+                    Number(
+                        row[metric.key]
+                    )
+            )
+            .filter(
+                Number.isFinite
+            );
+    }
+
+    function bounds(metric) {
+
+        const values =
+            finiteValues(
+                metric
+            );
+
+        if (!values.length) {
+
+            return {
+                min: 0,
+                max: 1
+            };
+        }
+
+        let min =
+            Number.isFinite(
+                metric.min
+            )
+                ? metric.min
+                : Math.min(
+                    ...values
+                );
+
+        let max =
+            Number.isFinite(
+                metric.max
+            )
+                ? metric.max
+                : Math.max(
+                    ...values
+                );
+
+        if (max === min) {
+
+            const margin =
+                Math.max(
+                    Math.abs(max) * 0.08,
+                    1
+                );
+
+            min -= margin;
+            max += margin;
+        }
+
+        else if (
+            !Number.isFinite(
+                metric.min
+            )
+            ||
+            !Number.isFinite(
+                metric.max
+            )
+        ) {
+
+            const margin =
+                (
+                    max
+                    -
+                    min
+                )
+                *
+                0.12;
+
+            min -= margin;
+            max += margin;
+        }
+
+        return {
+            min,
+            max
+        };
+    }
+
+    function pointFor(
+        row,
+        index,
+        metric,
+        metricBounds
+    ) {
+
+        const value =
+            Number(
+                row[
+                    metric.key
+                ]
+            );
+
+        if (!Number.isFinite(value)) {
+            return null;
+        }
+
+        const x =
+            padding.left
+            +
+            (
+                index
+                /
+                Math.max(
+                    source.length - 1,
+                    1
+                )
+            )
+            *
+            plotWidth;
+
+        const ratio =
+            Math.max(
+                0,
+                Math.min(
+                    1,
+                    (
+                        value
+                        -
+                        metricBounds.min
+                    )
+                    /
+                    (
+                        metricBounds.max
+                        -
+                        metricBounds.min
+                    )
+                )
+            );
+
+        const y =
+            padding.top
+            +
+            (
+                1
+                -
+                ratio
+            )
+            *
+            plotHeight;
+
+        return {
+            x,
+            y
+        };
+    }
+
+    const seriesMarkup =
+        metricDefinitions
+            .map(
+                metric => {
+
+                    const metricBounds =
+                        bounds(
+                            metric
+                        );
+
+                    const points =
+                        source
+                            .map(
+                                (
+                                    row,
+                                    index
+                                ) =>
+                                    pointFor(
+                                        row,
+                                        index,
+                                        metric,
+                                        metricBounds
+                                    )
+                            )
+                            .filter(Boolean);
+
+                    if (
+                        points.length
+                        <
+                        2
+                    ) {
+                        return "";
+                    }
+
+                    const pointString =
+                        points
+                            .map(
+                                point =>
+                                    `${point.x.toFixed(1)},${point.y.toFixed(1)}`
+                            )
+                            .join(" ");
+
+                    return `
+                        <polyline
+                            points="${pointString}"
+                            fill="none"
+                            stroke="${metric.color}"
+                            stroke-width="2.4"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            vector-effect="non-scaling-stroke"
+                            opacity="0.96"
+                        ></polyline>
+                    `;
+                }
+            )
+            .join("");
+
+    const horizontalGrid =
+        [0, 0.25, 0.5, 0.75, 1]
+            .map(
+                ratio => {
+
+                    const y =
+                        padding.top
+                        +
+                        ratio
+                        *
+                        plotHeight;
+
+                    const label =
+                        Math.round(
+                            100
+                            -
+                            ratio * 100
+                        );
+
+                    return `
+                        <line
+                            x1="${padding.left}"
+                            y1="${y}"
+                            x2="${padding.left + plotWidth}"
+                            y2="${y}"
+                            stroke="rgba(111,151,183,0.13)"
+                            stroke-width="1"
+                            vector-effect="non-scaling-stroke"
+                        ></line>
+
+                        <text
+                            x="8"
+                            y="${y + 4}"
+                            fill="#6f879b"
+                            font-size="11"
+                            font-family="Inter,system-ui,sans-serif"
+                        >${label}%</text>
+                    `;
+                }
+            )
+            .join("");
+
+    const sampleIndexes =
+        [
+            0,
+            Math.floor(
+                (source.length - 1)
+                *
+                0.25
+            ),
+            Math.floor(
+                (source.length - 1)
+                *
+                0.5
+            ),
+            Math.floor(
+                (source.length - 1)
+                *
+                0.75
+            ),
+            source.length - 1
+        ];
+
+    const verticalGrid =
+        sampleIndexes
+            .map(
+                index => {
+
+                    const x =
+                        padding.left
+                        +
+                        (
+                            index
+                            /
+                            Math.max(
+                                source.length - 1,
+                                1
+                            )
+                        )
+                        *
+                        plotWidth;
+
+                    const timestamp =
+                        new Date(
+                            source[
+                                index
+                            ].recorded_at
+                        );
+
+                    const label =
+                        Number.isNaN(
+                            timestamp.getTime()
+                        )
+                            ? "--:--"
+                            : timestamp.toLocaleTimeString(
+                                [],
+                                {
+                                    hour: "2-digit",
+                                    minute: "2-digit"
+                                }
+                            );
+
+                    return `
+                        <line
+                            x1="${x}"
+                            y1="${padding.top}"
+                            x2="${x}"
+                            y2="${padding.top + plotHeight}"
+                            stroke="rgba(111,151,183,0.07)"
+                            stroke-width="1"
+                            vector-effect="non-scaling-stroke"
+                        ></line>
+
+                        <text
+                            x="${x}"
+                            y="${height - 8}"
+                            text-anchor="${
+                                index === 0
+                                    ? "start"
+                                    : index === source.length - 1
+                                        ? "end"
+                                        : "middle"
+                            }"
+                            fill="#6f879b"
+                            font-size="11"
+                            font-family="Inter,system-ui,sans-serif"
+                        >${label}</text>
+                    `;
+                }
+            )
+            .join("");
+
+    container.innerHTML = `
+        <svg
+            viewBox="0 0 ${width} ${height}"
+            preserveAspectRatio="none"
+            role="img"
+            aria-label="Multi-series telemetry history"
+            style="
+                display:block;
+                width:100%;
+                height:100%;
+                overflow:hidden;
+            "
+        >
+            ${horizontalGrid}
+            ${verticalGrid}
+            ${seriesMarkup}
+        </svg>
+    `;
+}
+
 
 
 function formatMetricValue(
@@ -6217,10 +6636,6 @@ function renderAlertFeed(alerts) {
                                     `
                                     : ""
                             }
-
-                            <div class="alert-source-row">
-                                LOCAL PROJECT
-                            </div>
 
                         </button>
                     `;
