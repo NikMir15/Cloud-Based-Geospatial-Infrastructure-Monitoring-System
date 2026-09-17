@@ -45,6 +45,56 @@ ACTIVE_INCIDENT_STATUSES = {
 }
 
 
+# ============================================================
+# PHASE 6.8
+# INCIDENT OPERATIONS & SRE INTELLIGENCE
+# ============================================================
+
+PRIORITIES = {"P1", "P2", "P3", "P4"}
+
+SEVERITY_TO_PRIORITY = {
+    "critical": "P1",
+    "high": "P2",
+    "medium": "P3",
+    "low": "P4",
+}
+
+SLA_TARGETS = {
+    "P1": {
+        "acknowledge_minutes": 15,
+        "resolve_minutes": 240,
+    },
+    "P2": {
+        "acknowledge_minutes": 30,
+        "resolve_minutes": 480,
+    },
+    "P3": {
+        "acknowledge_minutes": 60,
+        "resolve_minutes": 1440,
+    },
+    "P4": {
+        "acknowledge_minutes": 240,
+        "resolve_minutes": 4320,
+    },
+}
+
+
+def priority_for_severity(severity):
+    return SEVERITY_TO_PRIORITY.get(
+        str(severity or "low").lower(),
+        "P4",
+    )
+
+
+def sla_targets(priority):
+    priority = str(priority or "P4").upper()
+
+    if priority not in PRIORITIES:
+        raise ValueError("Invalid incident priority")
+
+    return SLA_TARGETS[priority]
+
+
 def utc_now():
     return datetime.now(timezone.utc)
 
@@ -142,6 +192,16 @@ def _row_to_incident(row):
         "severity": mapping["severity"],
         "status": mapping["status"],
         "owner": mapping["owner"],
+        "priority": mapping["priority"],
+        "assigned_team": mapping["assigned_team"],
+        "assigned_at": iso(mapping["assigned_at"]),
+        "escalated": mapping["escalated"],
+        "escalated_at": iso(mapping["escalated_at"]),
+        "escalation_level": mapping["escalation_level"],
+        "acknowledgement_due_at": iso(mapping["acknowledgement_due_at"]),
+        "resolution_due_at": iso(mapping["resolution_due_at"]),
+        "acknowledgement_sla_breached": mapping["acknowledgement_sla_breached"],
+        "resolution_sla_breached": mapping["resolution_sla_breached"],
         "source": mapping["source"],
         "external": mapping["external"],
         "alert_count": mapping.get("alert_count", 0),
@@ -169,6 +229,16 @@ INCIDENT_SELECT = """
         i.severity,
         i.status,
         i.owner,
+        i.priority,
+        i.assigned_team,
+        i.assigned_at,
+        i.escalated,
+        i.escalated_at,
+        i.escalation_level,
+        i.acknowledgement_due_at,
+        i.resolution_due_at,
+        i.acknowledgement_sla_breached,
+        i.resolution_sla_breached,
         i.source,
         i.external,
         i.created_at,
@@ -425,6 +495,9 @@ def _create_incident(conn, alert):
         f"Initial signal: {alert.metric_label or alert.metric}."
     )
 
+    priority = priority_for_severity(alert.severity)
+    targets = sla_targets(priority)
+
     row = conn.execute(
         text("""
             INSERT INTO incidents (
@@ -435,6 +508,9 @@ def _create_incident(conn, alert):
                 primary_asset_name,
                 severity,
                 status,
+                priority,
+                acknowledgement_due_at,
+                resolution_due_at,
                 source,
                 external,
                 created_at,
@@ -450,6 +526,9 @@ def _create_incident(conn, alert):
                 :asset_name,
                 :severity,
                 'open',
+                :priority,
+                NOW() + make_interval(mins => :ack_minutes),
+                NOW() + make_interval(mins => :resolve_minutes),
                 'LOCAL_PROJECT',
                 FALSE,
                 NOW(),
@@ -466,6 +545,9 @@ def _create_incident(conn, alert):
             "asset_id": alert.asset_id,
             "asset_name": alert.asset_name,
             "severity": alert.severity,
+            "priority": priority,
+            "ack_minutes": targets["acknowledge_minutes"],
+            "resolve_minutes": targets["resolve_minutes"],
             "first_seen_at": alert.first_seen_at,
             "last_seen_at": alert.last_seen_at,
         },
@@ -481,12 +563,16 @@ def _create_incident(conn, alert):
         to_status="open",
         severity=alert.severity,
         owner=None,
-        note="Incident created automatically from telemetry alert correlation.",
+        note=(
+            "Incident created automatically from telemetry alert correlation. "
+            f"Priority {priority}; acknowledgement SLA "
+            f"{targets['acknowledge_minutes']} minutes; resolution SLA "
+            f"{targets['resolve_minutes']} minutes."
+        ),
         changed_by="SYSTEM",
     )
 
     return incident_id
-
 
 def _link_alert(conn, incident_id, alert_id, reason):
     conn.execute(
@@ -662,6 +748,13 @@ def _refresh_incident(conn, incident_id):
                 changed_by="SYSTEM",
             )
 
+    # Phase 6.8 Edit D: keep SLA state synchronized after automatic refresh.
+    evaluate_incident_sla(
+        conn,
+        incident_id,
+        changed_by="SYSTEM",
+    )
+
 
 def synchronize_incidents(engine, correlation_minutes=30):
     """
@@ -767,6 +860,157 @@ def synchronize_incidents(engine, correlation_minutes=30):
         "created": created,
         "linked": linked,
         "refreshed": refreshed,
+        "generated_at": utc_now().isoformat(),
+    }
+
+
+
+# ============================================================
+# PHASE 6.8 - EDIT D
+# SLA LIFECYCLE EVALUATION
+# ============================================================
+
+def evaluate_incident_sla(conn, incident_id, changed_by="SYSTEM"):
+    """Evaluate and persist SLA breach state for one incident."""
+    row = conn.execute(
+        text("""
+            SELECT
+                id, status, severity, owner,
+                acknowledged_at, resolved_at,
+                acknowledgement_due_at, resolution_due_at,
+                acknowledgement_sla_breached,
+                resolution_sla_breached
+            FROM incidents
+            WHERE id = :incident_id
+            FOR UPDATE;
+        """),
+        {"incident_id": incident_id},
+    ).fetchone()
+
+    if row is None:
+        return None
+
+    now = utc_now()
+    acknowledgement_breached = bool(row.acknowledgement_sla_breached)
+    resolution_breached = bool(row.resolution_sla_breached)
+
+    if row.acknowledgement_due_at is not None:
+        if row.acknowledged_at is not None:
+            acknowledgement_breached = (
+                acknowledgement_breached
+                or row.acknowledged_at > row.acknowledgement_due_at
+            )
+        else:
+            acknowledgement_breached = (
+                acknowledgement_breached
+                or now > row.acknowledgement_due_at
+            )
+
+    if row.resolution_due_at is not None:
+        if row.resolved_at is not None:
+            resolution_breached = (
+                resolution_breached
+                or row.resolved_at > row.resolution_due_at
+            )
+        else:
+            resolution_breached = (
+                resolution_breached
+                or now > row.resolution_due_at
+            )
+
+    acknowledgement_changed = (
+        acknowledgement_breached != bool(row.acknowledgement_sla_breached)
+    )
+    resolution_changed = (
+        resolution_breached != bool(row.resolution_sla_breached)
+    )
+
+    if acknowledgement_changed or resolution_changed:
+        conn.execute(
+            text("""
+                UPDATE incidents
+                SET
+                    acknowledgement_sla_breached = :ack_breached,
+                    resolution_sla_breached = :resolution_breached,
+                    updated_at = NOW()
+                WHERE id = :incident_id;
+            """),
+            {
+                "ack_breached": acknowledgement_breached,
+                "resolution_breached": resolution_breached,
+                "incident_id": incident_id,
+            },
+        )
+
+        if acknowledgement_changed and acknowledgement_breached:
+            add_incident_history_event(
+                conn,
+                incident_id,
+                action="ACKNOWLEDGEMENT_SLA_BREACHED",
+                from_status=row.status,
+                to_status=row.status,
+                severity=row.severity,
+                owner=row.owner,
+                note="Incident acknowledgement SLA deadline was breached.",
+                changed_by=changed_by,
+            )
+
+        if resolution_changed and resolution_breached:
+            add_incident_history_event(
+                conn,
+                incident_id,
+                action="RESOLUTION_SLA_BREACHED",
+                from_status=row.status,
+                to_status=row.status,
+                severity=row.severity,
+                owner=row.owner,
+                note="Incident resolution SLA deadline was breached.",
+                changed_by=changed_by,
+            )
+
+    return {
+        "incident_id": row.id,
+        "acknowledgement_sla_breached": acknowledgement_breached,
+        "resolution_sla_breached": resolution_breached,
+        "evaluated_at": now.isoformat(),
+    }
+
+
+def evaluate_sla_breaches(engine):
+    """Evaluate and persist SLA breach state across incidents."""
+    checked = 0
+    acknowledgement_breaches = 0
+    resolution_breaches = 0
+
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT id
+                FROM incidents
+                WHERE status != 'resolved'
+                   OR acknowledgement_due_at IS NOT NULL
+                   OR resolution_due_at IS NOT NULL
+                ORDER BY id;
+            """)
+        ).fetchall()
+
+        for row in rows:
+            result = evaluate_incident_sla(conn, row.id, changed_by="SYSTEM")
+            if result is None:
+                continue
+
+            checked += 1
+            if result["acknowledgement_sla_breached"]:
+                acknowledgement_breaches += 1
+            if result["resolution_sla_breached"]:
+                resolution_breaches += 1
+
+    return {
+        "source": SOURCE,
+        "external": EXTERNAL,
+        "checked": checked,
+        "acknowledgement_sla_breaches": acknowledgement_breaches,
+        "resolution_sla_breaches": resolution_breaches,
         "generated_at": utc_now().isoformat(),
     }
 
@@ -881,6 +1125,13 @@ def update_incident_status(
             changed_by=changed_by,
         )
 
+        # Phase 6.8 Edit D: evaluate SLA state after lifecycle transition.
+        evaluate_incident_sla(
+            conn,
+            incident_id,
+            changed_by=changed_by,
+        )
+
         return get_incident(conn, incident_id)
 
 
@@ -956,7 +1207,12 @@ def escalate_incident(
                     id,
                     status,
                     severity,
-                    owner
+                    owner,
+                    priority,
+                    escalation_level,
+                    created_at,
+                    acknowledged_at,
+                    resolved_at
                 FROM incidents
                 WHERE id = :incident_id
                 FOR UPDATE;
@@ -972,16 +1228,30 @@ def escalate_incident(
         if new_severity == current.severity:
             raise ValueError("Incident is already critical")
 
+        new_priority = priority_for_severity(new_severity)
+        targets = sla_targets(new_priority)
+
         conn.execute(
             text("""
                 UPDATE incidents
                 SET
                     severity = :severity,
+                    priority = :priority,
+                    escalated = TRUE,
+                    escalated_at = COALESCE(escalated_at, NOW()),
+                    escalation_level = COALESCE(escalation_level, 0) + 1,
+                    acknowledgement_due_at =
+                        created_at + make_interval(mins => :ack_minutes),
+                    resolution_due_at =
+                        created_at + make_interval(mins => :resolve_minutes),
                     updated_at = NOW()
                 WHERE id = :incident_id;
             """),
             {
                 "severity": new_severity,
+                "priority": new_priority,
+                "ack_minutes": targets["acknowledge_minutes"],
+                "resolve_minutes": targets["resolve_minutes"],
                 "incident_id": incident_id,
             },
         )
@@ -996,13 +1266,22 @@ def escalate_incident(
             owner=current.owner,
             note=(
                 note
-                or f"Severity escalated from {current.severity} to {new_severity}."
+                or (
+                    f"Severity escalated from {current.severity} to "
+                    f"{new_severity}; priority set to {new_priority}."
+                )
             ),
             changed_by=changed_by,
         )
 
-        return get_incident(conn, incident_id)
+        # Re-evaluate breach state against the updated priority/SLA targets.
+        evaluate_incident_sla(
+            conn,
+            incident_id,
+            changed_by=changed_by,
+        )
 
+        return get_incident(conn, incident_id)
 
 def incident_metrics(engine, hours=168):
     hours = max(1, min(int(hours), 24 * 365))
