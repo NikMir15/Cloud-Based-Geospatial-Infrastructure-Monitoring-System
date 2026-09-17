@@ -25,13 +25,21 @@ from trend_alert_engine import (
 
 from incident_engine import (
     INCIDENT_STATUSES,
+    PRIORITIES,
+    SLA_TARGETS,
     synchronize_incidents,
     list_incidents,
     load_incident_history,
     update_incident_status,
     assign_incident,
     escalate_incident,
-    incident_metrics
+    incident_metrics,
+    priority_for_severity,
+    sla_targets,
+    evaluate_incident_sla,
+    evaluate_sla_breaches,
+    add_incident_history_event,
+    get_incident
 )
 
 from urllib.request import Request, urlopen
@@ -275,6 +283,26 @@ class IncidentAssignRequest(BaseModel):
         ...,
         min_length=1,
         max_length=150
+    )
+
+    changed_by: str = Field(
+        default="operator",
+        min_length=1,
+        max_length=100
+    )
+
+    note: str | None = Field(
+        default=None,
+        max_length=2000
+    )
+
+
+class IncidentPriorityRequest(BaseModel):
+
+    priority: str = Field(
+        ...,
+        min_length=2,
+        max_length=2
     )
 
     changed_by: str = Field(
@@ -5156,8 +5184,6 @@ def incident_detail_api(
 
     with engine.connect() as conn:
 
-        from incident_engine import get_incident
-
         detail = get_incident(
             conn,
             incident_id
@@ -5554,6 +5580,332 @@ def sre_incident_metrics_api(
         engine,
         hours=hours
     )
+
+
+# =========================================================
+# PHASE 6.8
+# PRIORITY, SLA & SRE INTELLIGENCE API
+# =========================================================
+
+@app.get(
+    "/sre/priority-policy"
+)
+def sre_priority_policy_api():
+
+    return {
+        "source": "LOCAL_PROJECT",
+        "external": False,
+        "priorities": sorted(PRIORITIES),
+        "severity_mapping": {
+            severity: priority_for_severity(severity)
+            for severity in (
+                "critical",
+                "high",
+                "medium",
+                "low"
+            )
+        },
+        "sla_targets": SLA_TARGETS,
+        "generated_at": utc_now_iso()
+    }
+
+
+@app.post(
+    "/incidents/{incident_id}/priority"
+)
+def set_incident_priority_api(
+    incident_id: int,
+    request_data: IncidentPriorityRequest
+):
+
+    priority = request_data.priority.strip().upper()
+
+    if priority not in PRIORITIES:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid incident priority. Use P1, P2, P3, or P4."
+        )
+
+    targets = sla_targets(priority)
+
+    with engine.begin() as conn:
+
+        current = conn.execute(
+            text("""
+                SELECT
+                    id,
+                    status,
+                    severity,
+                    owner,
+                    priority
+                FROM incidents
+                WHERE id = :incident_id
+                FOR UPDATE;
+            """),
+            {"incident_id": incident_id}
+        ).fetchone()
+
+        if current is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Incident not found"
+            )
+
+        previous_priority = current.priority
+
+        conn.execute(
+            text("""
+                UPDATE incidents
+                SET
+                    priority = :priority,
+                    acknowledgement_due_at =
+                        created_at + make_interval(mins => :ack_minutes),
+                    resolution_due_at =
+                        created_at + make_interval(mins => :resolve_minutes),
+                    updated_at = NOW()
+                WHERE id = :incident_id;
+            """),
+            {
+                "priority": priority,
+                "ack_minutes": targets["acknowledge_minutes"],
+                "resolve_minutes": targets["resolve_minutes"],
+                "incident_id": incident_id
+            }
+        )
+
+        add_incident_history_event(
+            conn,
+            incident_id,
+            action="PRIORITY_CHANGED",
+            from_status=current.status,
+            to_status=current.status,
+            severity=current.severity,
+            owner=current.owner,
+            note=(
+                request_data.note
+                or f"Priority changed from {previous_priority or 'unset'} to {priority}."
+            ),
+            changed_by=request_data.changed_by
+        )
+
+        evaluate_incident_sla(
+            conn,
+            incident_id,
+            changed_by=request_data.changed_by
+        )
+
+        incident = get_incident(
+            conn,
+            incident_id
+        )
+
+    return {
+        "message": "Incident priority and SLA targets updated",
+        "source": "LOCAL_PROJECT",
+        "external": False,
+        "incident": incident
+    }
+
+
+@app.get(
+    "/incidents/{incident_id}/sla"
+)
+def incident_sla_api(
+    incident_id: int
+):
+
+    with engine.begin() as conn:
+
+        result = evaluate_incident_sla(
+            conn,
+            incident_id,
+            changed_by="SYSTEM"
+        )
+
+        if result is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Incident not found"
+            )
+
+        incident = get_incident(
+            conn,
+            incident_id
+        )
+
+    return {
+        "source": "LOCAL_PROJECT",
+        "external": False,
+        "sla": result,
+        "incident": incident
+    }
+
+
+@app.post(
+    "/sre/sla/evaluate"
+)
+def evaluate_sla_breaches_api():
+
+    return evaluate_sla_breaches(
+        engine
+    )
+
+
+@app.get(
+    "/sre/sla-status"
+)
+def sre_sla_status_api(
+    limit: int = Query(
+        default=250,
+        ge=1,
+        le=1000
+    )
+):
+
+    # Refresh persisted breach flags before returning the snapshot.
+    evaluation = evaluate_sla_breaches(
+        engine
+    )
+
+    with engine.connect() as conn:
+
+        rows = conn.execute(
+            text("""
+                SELECT
+                    id,
+                    incident_key,
+                    title,
+                    severity,
+                    status,
+                    owner,
+                    priority,
+                    acknowledgement_due_at,
+                    resolution_due_at,
+                    acknowledgement_sla_breached,
+                    resolution_sla_breached,
+                    acknowledged_at,
+                    resolved_at,
+                    created_at,
+                    updated_at
+                FROM incidents
+                ORDER BY
+                    CASE priority
+                        WHEN 'P1' THEN 1
+                        WHEN 'P2' THEN 2
+                        WHEN 'P3' THEN 3
+                        WHEN 'P4' THEN 4
+                        ELSE 5
+                    END,
+                    created_at DESC
+                LIMIT :limit;
+            """),
+            {"limit": limit}
+        ).fetchall()
+
+    incidents = [
+        dict(row._mapping)
+        for row in rows
+    ]
+
+    return {
+        "source": "LOCAL_PROJECT",
+        "external": False,
+        "evaluation": evaluation,
+        "count": len(incidents),
+        "incidents": incidents,
+        "generated_at": utc_now_iso()
+    }
+
+
+@app.get(
+    "/sre/intelligence"
+)
+def sre_intelligence_api(
+    hours: int = Query(
+        default=168,
+        ge=1,
+        le=8760
+    )
+):
+
+    evaluation = evaluate_sla_breaches(
+        engine
+    )
+
+    metrics = incident_metrics(
+        engine,
+        hours=hours
+    )
+
+    with engine.connect() as conn:
+
+        priority_rows = conn.execute(
+            text("""
+                SELECT
+                    COALESCE(priority, 'UNSET') AS priority,
+                    COUNT(*)::integer AS count
+                FROM incidents
+                WHERE status != 'resolved'
+                GROUP BY COALESCE(priority, 'UNSET');
+            """)
+        ).fetchall()
+
+        sla_row = conn.execute(
+            text("""
+                SELECT
+                    COUNT(*) FILTER (
+                        WHERE status != 'resolved'
+                          AND acknowledgement_sla_breached = TRUE
+                    )::integer AS active_ack_breaches,
+                    COUNT(*) FILTER (
+                        WHERE status != 'resolved'
+                          AND resolution_sla_breached = TRUE
+                    )::integer AS active_resolution_breaches,
+                    COUNT(*) FILTER (
+                        WHERE status != 'resolved'
+                          AND (
+                              acknowledgement_sla_breached = TRUE
+                              OR resolution_sla_breached = TRUE
+                          )
+                    )::integer AS incidents_with_active_sla_breach,
+                    COUNT(*) FILTER (
+                        WHERE status != 'resolved'
+                          AND escalated = TRUE
+                    )::integer AS escalated_open_incidents,
+                    COUNT(*) FILTER (
+                        WHERE status != 'resolved'
+                          AND owner IS NULL
+                    )::integer AS unassigned_open_incidents
+                FROM incidents;
+            """)
+        ).fetchone()
+
+    return {
+        "source": "LOCAL_PROJECT",
+        "external": False,
+        "window_hours": hours,
+        "incident_metrics": metrics,
+        "sla": {
+            "active_acknowledgement_breaches":
+                sla_row.active_ack_breaches or 0,
+            "active_resolution_breaches":
+                sla_row.active_resolution_breaches or 0,
+            "incidents_with_active_sla_breach":
+                sla_row.incidents_with_active_sla_breach or 0,
+            "last_evaluation": evaluation
+        },
+        "operations": {
+            "escalated_open_incidents":
+                sla_row.escalated_open_incidents or 0,
+            "unassigned_open_incidents":
+                sla_row.unassigned_open_incidents or 0,
+            "open_by_priority": {
+                row.priority: row.count
+                for row in priority_rows
+            }
+        },
+        "generated_at": utc_now_iso()
+    }
 
 
 # =========================================================
