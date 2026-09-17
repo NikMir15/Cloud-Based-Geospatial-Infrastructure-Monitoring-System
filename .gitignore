@@ -25,3 +25,8 @@ __pycache__/
 *.pyc
 *.before-phase-*
 *.before-*
+
+# Local frontend backups
+frontend/before_phase_6_8_fixed/
+frontend/before_sidebar_nav_fix/
+frontend/phase_6_7_backup/
