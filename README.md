@@ -1,899 +1,481 @@
-# Cloud-Based Geospatial Infrastructure Monitoring System
+# GeoInfra --- Cloud-Based Geospatial Infrastructure Monitoring System
 
-## Overview
+A real-time infrastructure observability and Site Reliability
+Engineering (SRE) platform combining geospatial monitoring, simulated
+infrastructure telemetry, alerting, incident lifecycle management, SLA
+tracking, and SRE intelligence in a unified command-center dashboard.
 
-The Cloud-Based Geospatial Infrastructure Monitoring System is a cloud-native situational-awareness platform designed to monitor, visualize, and analyze infrastructure assets across multiple geographic locations in real time.
+The project demonstrates practical Cloud, DevOps, Platform Engineering,
+Observability, GIS, and SRE concepts using FastAPI, PostgreSQL/PostGIS,
+Docker, WebSockets, Leaflet, JavaScript, and external earthquake data.
 
-The system combines FastAPI, PostgreSQL/PostGIS, Docker, WebSockets, Leaflet.js, OpenStreetMap, and live USGS earthquake data to provide interactive geospatial visualization, infrastructure analytics, real-time event monitoring, estimated exposure analysis, and project-local simulated sensor telemetry.
+------------------------------------------------------------------------
 
-The platform demonstrates how geospatial engineering, cloud technologies, DevOps practices, real-time communication, and infrastructure monitoring can be integrated into a single end-to-end system.
+## Project Overview
 
-> **Important:** Sensor telemetry and test earthquakes are simulated inside this project. They are not transmitted to USGS or another external monitoring system. USGS earthquake information is consumed as a read-only external data source.
+GeoInfra provides a real-time operational view of distributed
+infrastructure assets through an interactive geospatial dashboard.
 
----
+The platform monitors infrastructure locations, generates local
+simulated telemetry, detects abnormal operating conditions, stores
+historical telemetry, generates alerts, correlates alerts into
+incidents, manages incident lifecycle operations, evaluates SLA
+performance, and exposes SRE metrics through a command-center interface.
 
-## Features
+The system currently contains **56 monitored infrastructure assets**.
 
-### Interactive Geospatial Map
+------------------------------------------------------------------------
 
-- Global infrastructure visualization
-- Dark-themed monitoring interface
-- Infrastructure marker clustering
-- Real-time marker updates
-- Interactive infrastructure popups
-- Earthquake event visualization
-- Earthquake exposure-radius visualization
-- Nearest infrastructure lookup
-- Search and filtering
-- Risk-based infrastructure highlighting
+## Current Release --- Phase 6.8
 
-### Infrastructure Monitoring
+### SRE Intelligence & Incident Operations
 
-The platform monitors multiple infrastructure categories, including:
+Phase 6.8 extends the incident-management platform with:
 
-- Sensor nodes
-- Traffic monitoring points
-- Environmental monitoring stations
-- Grid infrastructure nodes
-- Communication towers
-- Bridge monitoring systems
-- Transport infrastructure
-- Cloud infrastructure
-- Healthcare infrastructure
-- Coastal infrastructure
+-   P1--P4 incident priorities
+-   Severity-to-priority mapping
+-   Incident and team assignment
+-   Incident escalation
+-   Acknowledgement and resolution SLA deadlines
+-   SLA breach detection and persistence
+-   Incident acknowledgement, mitigation, resolution, and reopening
+-   Incident history/audit trail
+-   MTTA and MTTR
+-   Priority distribution analytics
+-   SRE Intelligence dashboard
+-   Incident Operations queue
+-   Interactive incident controls
+-   SLA policy dashboard
+-   Live incident synchronization
 
-### Live USGS Earthquake Monitoring
-
-- Live earthquake data from the USGS GeoJSON feed
-- Earthquake magnitude visualization
-- Geographic event positioning
-- Earthquake depth information
-- Event timestamps
-- Severity classification
-- Estimated exposure-radius calculation
-- Infrastructure-to-earthquake correlation
-- Read-only external data integration
-
-The USGS integration follows this direction:
-
-```text
-USGS
-  |
-  | Read-only earthquake data
-  v
-FastAPI Backend
-```
-
-The project does not send simulated earthquakes, sensor telemetry, infrastructure information, or calculated risk information back to USGS.
-
-### Infrastructure Exposure and Risk Analysis
-
-- PostGIS spatial correlation
-- Infrastructure distance calculation
-- Earthquake exposure-radius analysis
-- Estimated operational exposure scoring
-- Severity classification
-- Risk-based map visualization
-- Affected infrastructure identification
-
-Infrastructure can be classified into estimated exposure levels:
-
-```text
-LOW
-MEDIUM
-HIGH
-CRITICAL
-```
-
-The calculated score represents estimated operational exposure for demonstration purposes.
-
-It is not a scientific earthquake damage prediction or structural engineering assessment.
-
-### Real-Time Updates
-
-- FastAPI WebSocket integration
-- Real-time infrastructure updates
-- Real-time earthquake updates
-- Local sensor telemetry streaming
-- Automatic frontend updates
-- WebSocket reconnection support
-- Live infrastructure health information
-
-### Local Live Sensor Telemetry
-
-The project contains an internal sensor simulation engine that generates telemetry for monitored infrastructure.
-
-Available telemetry includes:
-
-- Health percentage
-- CPU usage
-- Temperature
-- Network latency
-- Packet loss
-- Signal strength
-- Sensor status
-- Last updated timestamp
-
-Sensor states include:
-
-```text
-ONLINE
-DEGRADED
-OFFLINE
-```
-
-Example telemetry:
-
-```json
-{
-  "asset_id": 9,
-  "name": "London Bridge Sensor",
-  "source": "LOCAL_PROJECT",
-  "external": false,
-  "status": "online",
-  "health": 94,
-  "cpu_percent": 31.7,
-  "temperature_c": 36.2,
-  "latency_ms": 16.4,
-  "packet_loss_percent": 0.08,
-  "signal_strength": 93
-}
-```
-
-The telemetry is generated inside the project and is explicitly identified as:
-
-```text
-source: LOCAL_PROJECT
-external: false
-```
-
-It is simulated monitoring data and should not be interpreted as measurements from real physical infrastructure.
-
-### Analytics Dashboard
-
-- Total infrastructure count
-- Infrastructure categorization
-- Live earthquake count
-- Affected infrastructure count
-- High-risk asset count
-- Critical event count
-- Live feed status
-- Infrastructure distribution
-- Estimated exposure information
-- Local sensor health information
-
-### Cloud-Native Architecture
-
-- Dockerized backend
-- Dockerized frontend
-- PostgreSQL/PostGIS database
-- Multi-container deployment
-- FastAPI backend services
-- Nginx frontend
-- Environment-based configuration
-- REST API architecture
-- WebSocket communication
-
----
+------------------------------------------------------------------------
 
 ## Technology Stack
 
-### Frontend
+**Backend:** Python, FastAPI, Uvicorn, SQLAlchemy, WebSockets\
+**Database:** PostgreSQL, PostGIS\
+**Frontend:** HTML5, CSS3, Vanilla JavaScript, Leaflet, OpenStreetMap\
+**DevOps:** Docker, Docker Compose, Nginx, Git, GitHub, Linux / Ubuntu\
+**External Integration:** USGS Earthquake GeoJSON API
 
-- HTML5
-- CSS3
-- JavaScript (ES6)
-- Leaflet.js
-- Leaflet MarkerCluster
-- OpenStreetMap
+------------------------------------------------------------------------
 
-### Backend
+## Core Features
 
-- Python 3.12
-- FastAPI
-- Uvicorn
-- SQLAlchemy
-- Psycopg2
-- AsyncIO
-- WebSockets
+### Geospatial Monitoring
 
-### Database
+-   Interactive world map
+-   Infrastructure type and risk filtering
+-   Infrastructure markers and popups
+-   Nearest-infrastructure calculation
+-   PostGIS spatial queries
+-   Real-time location updates
 
-- PostgreSQL
-- PostGIS
+### Real-Time Sensor Telemetry
 
-### DevOps
+Telemetry includes health, CPU utilization, temperature, latency, packet
+loss, signal strength, operational status, and timestamps.
 
-- Docker
-- Docker Compose
-- Nginx
-- Linux / Ubuntu
-- Git
-- GitHub
+Local telemetry uses:
 
-### External Data Source
-
-- USGS Earthquake GeoJSON Feed
-
----
-
-## System Architecture
-
-```text
-                         Internet
-                            |
-                            | Read Only
-                            v
-                    USGS Earthquake Feed
-                            |
-                            v
-                   FastAPI Backend
-                    /            \
-                   /              \
-                  v                v
-        USGS Event Engine    Local Sensor Engine
-                  \                /
-                   \              /
-                    v            v
-                  Risk / Impact Engine
-                         |
-                         v
-                PostgreSQL + PostGIS
-                         |
-                  +------+------+
-                  |             |
-                  v             v
-               REST API     WebSockets
-                  |             |
-                  +------+------+
-                         |
-                         v
-                Leaflet.js Dashboard
-```
-
-### Local Sensor Data Flow
-
-```text
-Infrastructure Database
-          |
-          v
-Local Sensor Simulator
-          |
-          v
-FastAPI Backend
-          |
-     +----+--------------------+
-     |                         |
-     v                         v
-REST API                 WebSocket
-/sensor-telemetry        /ws/sensors
-     |                         |
-     +------------+------------+
-                  |
-                  v
-             Dashboard
-```
-
-Sensor telemetry remains within the project data flow and is not uploaded to USGS.
-
----
-
-## Project Structure
-
-```text
-Cloud-Based-Geospatial-Infrastructure-Monitoring-System/
-│
-├── backend/
-│   ├── main.py
-│   ├── requirements.txt
-│   └── Dockerfile
-│
-├── frontend/
-│   ├── index.html
-│   ├── app.js
-│   ├── style.css
-│   ├── favicon.ico
-│   └── Dockerfile
-│
-├── docker-compose.yml
-├── README.md
-└── .gitignore
-```
-
----
-
-## Installation
-
-### Clone Repository
-
-Using HTTPS:
-
-```bash
-git clone https://github.com/NikMir15/Cloud-Based-Geospatial-Infrastructure-Monitoring-System.git
-
-cd Cloud-Based-Geospatial-Infrastructure-Monitoring-System
-```
-
-Or using SSH:
-
-```bash
-git clone git@github.com:NikMir15/Cloud-Based-Geospatial-Infrastructure-Monitoring-System.git
-
-cd Cloud-Based-Geospatial-Infrastructure-Monitoring-System
-```
-
-### Build Containers
-
-```bash
-docker compose build
-```
-
-### Start Application
-
-```bash
-docker compose up -d
-```
-
-Alternatively, build and start in one command:
-
-```bash
-docker compose up -d --build
-```
-
-### Verify Containers
-
-```bash
-docker compose ps
-```
-
-Expected containers:
-
-```text
-geo-backend
-geo-frontend
-geodb
-```
-
-### View Backend Logs
-
-```bash
-docker logs geo-backend --tail 50
-```
-
----
-
-## Application URLs
-
-### Frontend
-
-```text
-http://localhost:8080
-```
-
-### Backend API
-
-```text
-http://localhost:8000
-```
-
-### API Documentation
-
-```text
-http://localhost:8000/docs
-```
-
----
-
-## Available APIs
-
-### Home
-
-```text
-GET /
-```
-
-Returns application and monitoring status.
-
----
-
-### Health
-
-```text
-GET /health
-```
-
-Returns backend, database, USGS, and local sensor monitoring status.
-
----
-
-### Infrastructure Locations
-
-```text
-GET /locations
-```
-
-Returns all monitored infrastructure points with geographic coordinates and infrastructure information.
-
----
-
-### Analytics
-
-```text
-GET /analytics
-```
-
-Returns infrastructure statistics, earthquake statistics, estimated exposure information, and local sensor monitoring statistics.
-
----
-
-### Search Infrastructure
-
-```text
-GET /search?q=<search-term>
-```
-
-Searches monitored infrastructure using name, description, or infrastructure information.
-
----
-
-### Nearest Infrastructure
-
-```text
-GET /nearest?lat=<latitude>&lon=<longitude>
-```
-
-Returns the closest infrastructure asset to the selected geographic coordinates.
-
----
-
-### Live Earthquake Events
-
-```text
-GET /events
-```
-
-Returns normalized live USGS earthquake events together with any active project-local test event.
-
----
-
-### Impact Analysis
-
-```text
-GET /impact-analysis
-```
-
-Performs geospatial correlation between earthquake events and infrastructure assets.
-
----
-
-### Estimated Risk
-
-```text
-GET /risk
-```
-
-Returns infrastructure exposure information and estimated risk classifications.
-
----
-
-### Local Sensor Telemetry
-
-```text
-GET /sensor-telemetry
-```
-
-Returns project-local simulated telemetry for monitored infrastructure.
-
-Telemetry is explicitly identified as:
-
-```json
+``` json
 {
   "source": "LOCAL_PROJECT",
   "external": false
 }
 ```
 
----
+### Historical Telemetry
 
-### Individual Sensor Telemetry
+-   Time-window queries
+-   Telemetry summaries
+-   Health, CPU, temperature, latency and packet-loss history
+-   Automatic persistence
+-   Retention management
+-   Dashboard visualization
 
-```text
+### Alerting
+
+The platform detects threshold and trend conditions including high CPU,
+temperature, latency, packet loss, health degradation, offline
+infrastructure, and abnormal telemetry changes.
+
+------------------------------------------------------------------------
+
+## Alert Lifecycle --- Phase 6.6
+
+``` text
+ACTIVE → ACKNOWLEDGED → RESOLVED
+```
+
+Includes alert creation, acknowledgement, manual/automatic resolution,
+reopening, severity updates, and persistent history.
+
+------------------------------------------------------------------------
+
+## Incident Management --- Phase 6.7
+
+Related telemetry alerts can be correlated into incidents.
+
+``` text
+OPEN → INVESTIGATING → MITIGATED → RESOLVED
+```
+
+Capabilities include synchronization, assignment, escalation,
+acknowledgement, mitigation, resolution, reopening, history, metrics,
+and WebSocket updates.
+
+------------------------------------------------------------------------
+
+## SRE Intelligence --- Phase 6.8
+
+### Priority Model
+
+  Priority   Operational Level
+  ---------- -------------------
+  P1         Critical
+  P2         High
+  P3         Standard
+  P4         Low
+
+Default severity mapping:
+
+``` text
+critical → P1
+high     → P2
+medium   → P3
+low      → P4
+```
+
+### SLA Policy
+
+  Priority     Acknowledge        Resolve
+  ---------- ------------- --------------
+  P1            15 minutes    240 minutes
+  P2            30 minutes    480 minutes
+  P3            60 minutes   1440 minutes
+  P4           240 minutes   4320 minutes
+
+SLA fields include:
+
+-   `acknowledgement_due_at`
+-   `resolution_due_at`
+-   `acknowledgement_sla_breached`
+-   `resolution_sla_breached`
+
+SRE metrics include MTTA, MTTR, open/resolved incidents, critical open
+incidents, SLA breaches, and incident distribution by severity, status,
+and priority.
+
+------------------------------------------------------------------------
+
+## Infrastructure Command Center
+
+The frontend contains:
+
+-   Infrastructure overview
+-   KPI cards
+-   Interactive world map
+-   Infrastructure health
+-   Real-time and historical telemetry
+-   Sensor health alerts
+-   Recent alerts
+-   Persistent alert lifecycle
+-   Incident Operations
+-   SRE Intelligence
+-   SLA Intelligence
+-   Priority distribution
+-   Analytics
+-   Operational controls
+
+Incident actions include:
+
+``` text
+View
+Priority
+Assign
+Acknowledge
+Escalate
+Mitigate
+Resolve
+Reopen
+```
+
+------------------------------------------------------------------------
+
+## REST API
+
+### Infrastructure
+
+``` http
+GET /health
+GET /locations
+GET /nearest
+GET /analytics
+```
+
+### Telemetry
+
+``` http
+GET /sensor-telemetry
 GET /sensor-telemetry/{asset_id}
+GET /telemetry-history/{asset_id}
+GET /telemetry-summary/{asset_id}
 ```
 
-Returns local simulated telemetry for a specific infrastructure asset.
+### Alerts
 
-Example:
-
-```text
-GET /sensor-telemetry/9
+``` http
+GET /sensor-health
+GET /alerts
+GET /alerts/{asset_id}
+GET /telemetry-alerts
+GET /telemetry-alerts/{asset_id}
+GET /telemetry-alert-history
+GET /telemetry-alert-history/{alert_id}/events
+POST /telemetry-alerts/{alert_id}/acknowledge
+POST /telemetry-alerts/{alert_id}/resolve
 ```
 
----
+### Incidents
 
-### Test Earthquake
-
-```text
-GET /test-event
+``` http
+GET  /incidents
+POST /incidents/synchronize
+GET  /incidents/{incident_id}
+POST /incidents/{incident_id}/acknowledge
+POST /incidents/{incident_id}/assign
+POST /incidents/{incident_id}/escalate
+GET  /incidents/{incident_id}/events
+POST /incidents/{incident_id}/mitigate
+POST /incidents/{incident_id}/reopen
+POST /incidents/{incident_id}/resolve
 ```
 
-Returns the currently active project-local simulated earthquake.
+### Phase 6.8 SRE APIs
 
-Create a simulated earthquake:
-
-```text
-POST /test-event
+``` http
+POST /incidents/{incident_id}/priority
+GET  /incidents/{incident_id}/sla
+GET  /sre/incident-metrics
+GET  /sre/intelligence
+GET  /sre/priority-policy
+GET  /sre/sla-status
+POST /sre/sla/evaluate
 ```
 
-Remove the simulated earthquake:
+------------------------------------------------------------------------
 
-```text
-DELETE /test-event
+## WebSockets
+
+``` text
+/ws/events
+/ws/locations
+/ws/sensors
+/ws/alerts
+/ws/telemetry-alerts
+/ws/incidents
 ```
 
-Test earthquakes are clearly identified as simulated project data and are never presented as real USGS earthquakes.
+------------------------------------------------------------------------
 
----
+## Database
 
-## WebSocket APIs
+Primary objects include:
 
-### Infrastructure Updates
-
-```text
-WebSocket /ws/locations
+``` text
+infrastructure_points
+sensor_telemetry_history
+telemetry_alerts
+telemetry_alert_history
+incidents
+incident_alerts
+incident_history
+incident_sre_summary
 ```
 
-Provides real-time infrastructure updates.
+------------------------------------------------------------------------
 
-### Earthquake Updates
+## Project Structure
 
-```text
-WebSocket /ws/events
+``` text
+Cloud-Based-Geospatial-Infrastructure-Monitoring-System/
+├── backend/
+│   ├── main.py
+│   ├── alert_engine.py
+│   ├── trend_alert_engine.py
+│   ├── incident_engine.py
+│   ├── requirements.txt
+│   ├── migrations/
+│   │   ├── phase_6_4_sensor_history.sql
+│   │   ├── phase_6_6_alert_persistence.sql
+│   │   ├── phase_6_7_incident_management.sql
+│   │   └── phase_6_8_sre_intelligence.sql
+│   └── Dockerfile
+├── frontend/
+│   ├── index.html
+│   ├── app.js
+│   ├── style.css
+│   └── Dockerfile
+├── scripts/
+│   ├── verify_phase_6_8_edit_d.py
+│   └── test_phase_6_8_mutation.sh
+├── docker-compose.yml
+├── .gitignore
+└── README.md
 ```
 
-Provides real-time earthquake and estimated exposure updates.
+------------------------------------------------------------------------
 
-### Sensor Telemetry
+## Running the Project
 
-```text
-WebSocket /ws/sensors
+Requirements: Docker, Docker Compose, and Git.
+
+``` bash
+git clone git@github.com:NikMir15/Cloud-Based-Geospatial-Infrastructure-Monitoring-System.git
+cd Cloud-Based-Geospatial-Infrastructure-Monitoring-System
+docker compose up -d --build
+docker compose ps
 ```
 
-Provides project-local simulated infrastructure telemetry.
+Frontend:
 
----
-
-## Phase 6.1 - Risk Engine Test Mode
-
-Real earthquakes do not necessarily occur close to infrastructure contained in the demonstration database.
-
-To test the complete geospatial exposure pipeline, the project includes an internal simulated earthquake mode.
-
-A test event can be created near a selected infrastructure asset.
-
-Example configuration:
-
-```text
-Target Infrastructure:
-London Bridge Sensor
-
-Magnitude:
-6.2
-
-Exposure Radius:
-200 km
+``` text
+http://localhost:8080
 ```
 
-The test event follows the same processing pipeline:
+Backend:
 
-```text
-Simulated Earthquake
-        |
-        v
-PostGIS Spatial Analysis
-        |
-        v
-Affected Infrastructure
-        |
-        v
-Estimated Exposure
-        |
-        v
-Risk Classification
-        |
-        v
-Dashboard Visualization
+``` text
+http://localhost:8000
 ```
 
-Every simulated event contains identifiers such as:
+FastAPI documentation:
 
-```text
-source: TEST
-simulated: true
-external: false
-project_only: true
+``` text
+http://localhost:8000/docs
 ```
 
-This prevents simulated events from being confused with real USGS earthquake data.
+------------------------------------------------------------------------
 
----
+## Database Access
 
-## Phase 6.2 - Local Sensor Monitoring
-
-Phase 6.2 introduces project-local simulated infrastructure telemetry.
-
-The FastAPI backend generates changing monitoring values and distributes them to the dashboard through REST and WebSockets.
-
-Example dashboard information:
-
-```text
-London Bridge Sensor
-
-Infrastructure Type: Sensor
-Asset Status: operational
-
-Estimated Exposure: Low
-
-LOCAL LIVE TELEMETRY
-ONLINE
-
-Health:       94%
-CPU:          31.7%
-Temperature:  36.2 C
-Latency:      16.4 ms
-Packet Loss:  0.08%
-Signal:       93%
-
-Source: LOCAL PROJECT SIMULATION
-Updated: just now
+``` bash
+docker exec -it geodb psql -U postgres -d geospatialdb
 ```
 
-The local monitoring engine can simulate:
+Verify PostGIS:
 
-- Normal operation
-- Degraded infrastructure
-- Offline infrastructure
-- CPU changes
-- Temperature changes
-- Network latency changes
-- Packet loss
-- Signal-quality changes
-
-This provides a controlled environment for demonstrating real-time infrastructure monitoring without connecting to real physical infrastructure.
-
----
-
-## Current Capabilities
-
-- Global infrastructure visualization
-- PostgreSQL/PostGIS geospatial database
-- Infrastructure analytics dashboard
-- Live USGS earthquake monitoring
-- Read-only external earthquake integration
-- PostGIS spatial correlation
-- Earthquake exposure-radius analysis
-- Estimated infrastructure risk scoring
-- Real-time WebSocket updates
-- Local simulated sensor telemetry
-- Infrastructure health monitoring
-- Test earthquake simulation
-- Risk-based infrastructure visualization
-- Infrastructure search and filtering
-- Nearest infrastructure search
-- Marker clustering
-- Dockerized deployment
-- Nginx frontend
-- FastAPI REST API
-- Real-time sensor WebSocket
-
----
-
-## Data and Privacy
-
-The platform uses three primary types of data.
-
-### Infrastructure Data
-
-Infrastructure records are stored in the project's PostgreSQL/PostGIS database.
-
-```text
-PostgreSQL/PostGIS
-        |
-        v
-FastAPI
-        |
-        v
-Dashboard
+``` sql
+SELECT PostGIS_Version();
 ```
 
-### Local Sensor Data
+------------------------------------------------------------------------
 
-Sensor telemetry is generated by the local project simulator.
+## Phase 6.8 Verification
 
-```text
-Local Sensor Simulator
-        |
-        v
-FastAPI
-        |
-        v
-Dashboard
+``` bash
+python3 -m py_compile backend/main.py
+python3 -m py_compile backend/alert_engine.py
+python3 -m py_compile backend/trend_alert_engine.py
+python3 -m py_compile backend/incident_engine.py
+
+node --check frontend/app.js
+
+python3 scripts/verify_phase_6_8_edit_d.py
+./scripts/test_phase_6_8_mutation.sh
 ```
 
-It is identified as:
+------------------------------------------------------------------------
 
-```text
-source = LOCAL_PROJECT
-external = false
+## Privacy & Data Provenance
+
+Simulated infrastructure telemetry is generated, stored, and processed
+locally by the project.
+
+USGS earthquake information is retrieved through a read-only HTTP GET
+integration. Local infrastructure telemetry is not sent to USGS.
+OpenStreetMap is used for map tiles.
+
+------------------------------------------------------------------------
+
+## Risk Model
+
+Infrastructure risk scoring is an **estimated operational exposure
+heuristic** for monitoring and demonstration. It is not a physical
+damage prediction, earthquake damage forecast, safety certification, or
+production disaster-impact model.
+
+------------------------------------------------------------------------
+
+## Engineering Concepts Demonstrated
+
+-   Cloud-native architecture
+-   Containerization
+-   REST APIs and WebSockets
+-   PostgreSQL/PostGIS
+-   Geospatial analysis
+-   Real-time observability
+-   Telemetry pipelines
+-   Threshold and trend alerting
+-   Alert lifecycle management
+-   Incident correlation and management
+-   SLA-oriented operations
+-   MTTA and MTTR
+-   SRE workflows
+-   Operational dashboards
+-   Linux and Git/GitHub workflows
+
+------------------------------------------------------------------------
+
+## Development Roadmap
+
+Completed:
+
+``` text
+Phase 6.2  Local Sensor Telemetry
+Phase 6.3  Sensor Health Alerting
+Phase 6.4  Historical Telemetry
+Phase 6.5  Telemetry Alerting & Trend Detection
+Phase 6.6  Persistent Alert Lifecycle
+Phase 6.7  Incident Management & SRE Analytics
+Phase 6.8  SRE Intelligence & Incident Operations
 ```
 
-The application does not send this simulated telemetry to USGS.
+Potential next milestone:
 
-### Earthquake Data
+**Phase 6.9 --- Incident Automation & Reliability Engineering**
 
-Earthquake information is retrieved from the public USGS earthquake feed.
+Possible future capabilities include automated remediation runbooks,
+SLO/error-budget tracking, improved incident correlation, automated
+incident response, runbook history, service dependency modelling, and
+advanced infrastructure analytics.
 
-```text
-USGS
-  |
-  v
-Project
-```
-
-This is external data entering the application.
-
-The USGS integration does not send project sensor data, simulated events, infrastructure information, or exposure calculations back to USGS.
-
----
-
-## Security Considerations
-
-The current project is designed primarily as a development, research, and portfolio platform.
-
-Before public or production deployment, the following should be implemented:
-
-- Authentication
-- Authorization
-- Admin-only test controls
-- Restricted test endpoints
-- Test mode disabled by default
-- HTTPS
-- Secure environment variables
-- Restricted CORS configuration
-- Reverse proxy security
-- API rate limiting
-- Database network restrictions
-- Secrets management
-- Monitoring and audit logging
-
-Sensitive information must never be committed to Git.
-
-Examples include:
-
-```text
-.env
-Database passwords
-API keys
-Admin API keys
-Cloud credentials
-Private SSH keys
-```
-
----
-
-## Future Enhancements
-
-### Planned Features
-
-- Sensor health overview panel
-- Historical telemetry storage
-- Historical telemetry charts
-- Incident management workflow
-- Alert management system
-- Authentication and authorization
-- Admin-only simulation controls
-- AI anomaly detection
-- Predictive infrastructure analytics
-- Multi-hazard monitoring
-- Geo-fencing support
-- Infrastructure Digital Twin capabilities
-- Kubernetes deployment
-- AWS cloud deployment
-- CI/CD pipeline automation
-- Prometheus and Grafana monitoring
-- Centralized application logging
-- Production security hardening
-
----
-
-## What This Project Demonstrates
-
-### Cloud and DevOps
-
-- Docker
-- Docker Compose
-- Linux
-- Nginx
-- Multi-container architecture
-- Environment-based configuration
-- Git
-- GitHub
-
-### Backend Engineering
-
-- FastAPI
-- REST APIs
-- WebSockets
-- Async background processing
-- External API consumption
-- Application state management
-
-### Database Engineering
-
-- PostgreSQL
-- PostGIS
-- Spatial queries
-- Geographic distance calculations
-- Geospatial data storage
-
-### Real-Time Systems
-
-- WebSocket communication
-- Live dashboard updates
-- Simulated telemetry streams
-- Event-driven monitoring concepts
-
-### Geospatial Engineering
-
-- Leaflet.js
-- OpenStreetMap
-- Geographic coordinates
-- Spatial correlation
-- Exposure-radius visualization
-- Nearest-location analysis
-
-### Infrastructure Monitoring
-
-- Infrastructure health metrics
-- Estimated exposure scoring
-- Event correlation
-- Situational awareness
-- Local telemetry simulation
-- Failure-state simulation
-
----
+------------------------------------------------------------------------
 
 ## Disclaimer
 
-This project is developed for academic, research, portfolio, and engineering demonstration purposes.
+This project is an engineering portfolio and research/demo platform.
+Infrastructure telemetry is simulated unless explicitly identified
+otherwise. External earthquake information is obtained from the USGS
+read-only feed.
 
-The earthquake exposure model and local sensor telemetry are designed to demonstrate geospatial processing, infrastructure monitoring architecture, real-time communication, backend engineering, and cloud/DevOps concepts.
+The platform should not be used as a production emergency-response,
+public-safety, or physical infrastructure damage-prediction system.
 
-The system must not be used as:
-
-- An official earthquake warning system
-- An emergency response system
-- A structural damage prediction system
-- A substitute for authoritative emergency information
-- A real physical infrastructure monitoring system without appropriate integrations and validation
-
----
+------------------------------------------------------------------------
 
 ## Author
 
-**Nikunj Mirajkar**
+**Nikunj Mirajkar**\
+Cloud \| DevOps \| Platform & Infrastructure Engineering\
+GitHub: **NikMir15**
 
-MSc Cloud & Enterprise Computing  
-Nottingham Trent University
+------------------------------------------------------------------------
 
-LinkedIn:  
-https://www.linkedin.com/in/nikunjmirajkar/
+## Project Status
 
-GitHub:  
-https://github.com/NikMir15
+**Active Development**
 
----
-
-## License
-
-This project is developed for academic, research, portfolio, and demonstration purposes and may be extended for enterprise geospatial infrastructure monitoring applications.
+Current milestone: **Phase 6.8 --- SRE Intelligence & Incident
+Operations**
