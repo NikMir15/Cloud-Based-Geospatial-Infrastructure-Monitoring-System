@@ -1,15 +1,13 @@
 /* =========================================================
    INFRASTRUCTURE SITUATIONAL AWARENESS PLATFORM
 
-   Phase 6.6 Frontend
+   Phase 6.3 Frontend
 
    - Live USGS earthquake visualization
    - Project-local simulated sensor telemetry
    - PostGIS exposure/risk visualization
    - Phase 6.1 local test earthquake
    - REST + WebSockets
-   - Persistent telemetry history + live SVG charts
-   - Persistent telemetry alert lifecycle + audit history
 ========================================================= */
 
 
@@ -69,46 +67,6 @@ let sensorHealthSummary = {
     offline: 0,
     average_health: 0
 };
-
-
-let selectedHistoryAssetId = null;
-
-let telemetryHistoryRecords = [];
-
-let telemetryHistoryTimer = null;
-
-let telemetryHistoryPaused = false;
-
-let telemetryHistoryLastUpdatedAt = null;
-
-const TELEMETRY_HISTORY_REFRESH_MS = 60000;
-
-
-let telemetryAlertSocket = null;
-
-let telemetryAlertData = [];
-
-let telemetryAlertSummary = {
-    total: 0,
-    critical: 0,
-    high: 0,
-    medium: 0,
-    low: 0,
-    threshold_alerts: 0,
-    trend_alerts: 0,
-    affected_assets: 0
-};
-
-let telemetryAlertWindowMinutes = 5;
-
-
-let persistedTelemetryAlerts = [];
-
-let persistedAlertLastUpdatedAt = null;
-
-let selectedPersistedAlertId = null;
-
-let persistedAlertRequestInFlight = false;
 
 
 /* =========================================================
@@ -333,12 +291,9 @@ function initMap() {
 
 
     /*
-        OpenStreetMap standard raster basemap.
+        OpenStreetMap basemap.
 
-        This endpoint does NOT require an API key.
-        The dark command-center appearance is applied
-        using CSS only, so the map remains stable and
-        does not display provider API-key watermarks.
+        No CARTO API key is required.
     */
 
     L.tileLayer(
@@ -351,7 +306,7 @@ function initMap() {
                 19,
 
             noWrap:
-                true,
+                false,
 
             attribution:
                 "&copy; OpenStreetMap contributors"
@@ -373,19 +328,8 @@ function initMap() {
                 spiderfyOnMaxZoom:
                     true,
 
-                /*
-                    Phase 6.7 command-center view:
-                    show every infrastructure marker individually.
-
-                    The map's minimum zoom is 2, so disabling
-                    clustering at zoom 2 removes the numeric
-                    cluster bubbles (for example 23, 18, 6)
-                    at every usable zoom level while keeping
-                    MarkerClusterGroup compatibility for the
-                    existing focus/zoom functions.
-                */
                 disableClusteringAtZoom:
-                    2,
+                    12,
 
                 iconCreateFunction:
                     createClusterIcon
@@ -1039,11 +983,6 @@ function createInfrastructureMarker(point) {
                     point
                 )
             );
-
-            selectHistoryAsset(
-                point.id,
-                true
-            );
         }
     );
 
@@ -1317,103 +1256,6 @@ function populateTestAssetSelect(data) {
 }
 
 
-
-/* =========================================================
-   PHASE 6.4 HISTORY ASSET SELECTOR
-========================================================= */
-
-function populateHistoryAssetSelect(data) {
-
-    const select =
-        document.getElementById(
-            "historyAsset"
-        );
-
-    if (!select) {
-        return;
-    }
-
-    const previous =
-        select.value
-        || (
-            selectedHistoryAssetId != null
-                ? String(selectedHistoryAssetId)
-                : ""
-        );
-
-    select.innerHTML = `
-        <option value="">
-            Select infrastructure...
-        </option>
-    `;
-
-    [...data]
-        .sort(
-            (a, b) =>
-                String(a.name || "")
-                    .localeCompare(
-                        String(b.name || "")
-                    )
-        )
-        .forEach(
-            point => {
-
-                const option =
-                    document.createElement(
-                        "option"
-                    );
-
-                option.value =
-                    String(point.id);
-
-                option.textContent =
-                    `${point.name} (${point.infra_type || "Unknown"})`;
-
-                select.appendChild(
-                    option
-                );
-            }
-        );
-
-    if (
-        previous
-        &&
-        data.some(
-            item =>
-                String(item.id)
-                ===
-                String(previous)
-        )
-    ) {
-
-        select.value =
-            String(previous);
-
-        selectedHistoryAssetId =
-            Number(previous);
-
-        return;
-    }
-
-    if (
-        selectedHistoryAssetId == null
-        &&
-        data.length > 0
-    ) {
-
-        selectedHistoryAssetId =
-            Number(
-                data[0].id
-            );
-
-        select.value =
-            String(
-                selectedHistoryAssetId
-            );
-    }
-}
-
-
 /* =========================================================
    APPLY FILTERS
 ========================================================= */
@@ -1564,11 +1406,6 @@ async function loadLocations() {
 
 
         populateTestAssetSelect(
-            infrastructureData
-        );
-
-
-        populateHistoryAssetSelect(
             infrastructureData
         );
 
@@ -3191,3101 +3028,6 @@ function showTestMessage(
 
 
 
-
-
-/* =========================================================
-   PHASE 6.5 TELEMETRY ALERTING
-========================================================= */
-
-function setTelemetryAlertStatus(
-    state,
-    text
-) {
-
-    const element =
-        document.getElementById(
-            "telemetryAlertStatus"
-        );
-
-    if (!element) {
-        return;
-    }
-
-    element.className =
-        `telemetry-alert-status ${state}`;
-
-    element.textContent =
-        text;
-}
-
-
-function updateTelemetryAlertSummary(
-    summary
-) {
-
-    telemetryAlertSummary = {
-        ...telemetryAlertSummary,
-        ...(summary || {})
-    };
-
-    setTextIfExists(
-        "telemetryAlertTotal",
-        telemetryAlertSummary.total || 0
-    );
-
-    setTextIfExists(
-        "telemetryAlertCritical",
-        telemetryAlertSummary.critical || 0
-    );
-
-    setTextIfExists(
-        "telemetryAlertHigh",
-        telemetryAlertSummary.high || 0
-    );
-
-    setTextIfExists(
-        "telemetryAlertMedium",
-        telemetryAlertSummary.medium || 0
-    );
-
-    setTextIfExists(
-        "telemetryTrendAlertCount",
-        telemetryAlertSummary.trend_alerts || 0
-    );
-
-    setTextIfExists(
-        "telemetryAlertAssets",
-        telemetryAlertSummary.affected_assets || 0
-    );
-
-    const meta =
-        document.getElementById(
-            "telemetryAlertMeta"
-        );
-
-    if (meta) {
-
-        meta.textContent =
-            `Trend window: ${telemetryAlertWindowMinutes} min · `
-            +
-            `${telemetryAlertSummary.threshold_alerts || 0} threshold · `
-            +
-            `${telemetryAlertSummary.trend_alerts || 0} trend`;
-    }
-}
-
-
-function renderTelemetryAlerts() {
-
-    const container =
-        document.getElementById(
-            "telemetryAlertFeed"
-        );
-
-    if (!container) {
-        return;
-    }
-
-    const severitySelect =
-        document.getElementById(
-            "telemetryAlertSeverity"
-        );
-
-    const selectedSeverity =
-        severitySelect
-            ? severitySelect.value
-            : "all";
-
-    const alerts =
-        telemetryAlertData.filter(
-            alert =>
-                selectedSeverity === "all"
-                ||
-                alert.severity
-                === selectedSeverity
-        );
-
-    if (
-        alerts.length === 0
-    ) {
-
-        container.innerHTML = `
-            <div class="empty-state">
-                No active telemetry alerts for the selected severity.
-            </div>
-        `;
-
-        return;
-    }
-
-    container.innerHTML =
-        alerts
-            .slice(
-                0,
-                25
-            )
-            .map(
-                alert => {
-
-                    const severity =
-                        escapeHtml(
-                            alert.severity
-                            || "low"
-                        );
-
-                    const kind =
-                        escapeHtml(
-                            alert.alert_kind
-                            || "threshold"
-                        );
-
-                    const latest =
-                        formatTelemetryAlertValue(
-                            alert.latest_value,
-                            alert.unit
-                        );
-
-                    const reference =
-                        alert.reference_value
-                        == null
-                            ? ""
-                            : `
-                                <span class="telemetry-alert-detail">
-                                    Start:
-                                    ${formatTelemetryAlertValue(
-                                        alert.reference_value,
-                                        alert.unit
-                                    )}
-                                </span>
-                            `;
-
-                    const delta =
-                        alert.delta
-                        == null
-                            ? ""
-                            : `
-                                <span class="telemetry-alert-detail">
-                                    Change:
-                                    ${Number(alert.delta).toFixed(2)}
-                                    ${escapeHtml(alert.unit || "")}
-                                </span>
-                            `;
-
-                    return `
-                        <button
-                            type="button"
-                            class="
-                                telemetry-alert-item
-                                severity-${severity}
-                            "
-                            onclick="focusTelemetryAlertAsset(${Number(alert.asset_id)})"
-                        >
-
-                            <div class="telemetry-alert-item-header">
-
-                                <strong>
-                                    ${escapeHtml(
-                                        String(
-                                            alert.asset_name
-                                            || `Asset ${alert.asset_id}`
-                                        )
-                                    )}
-                                </strong>
-
-                                <span
-                                    class="
-                                        telemetry-alert-severity
-                                        severity-${severity}
-                                    "
-                                >
-                                    ${severity.toUpperCase()}
-                                </span>
-
-                            </div>
-
-                            <div class="telemetry-alert-message">
-                                ${escapeHtml(
-                                    alert.message
-                                    || "Telemetry anomaly detected"
-                                )}
-                            </div>
-
-                            <div class="telemetry-alert-metric-row">
-
-                                <span>
-                                    ${escapeHtml(
-                                        alert.metric_label
-                                        || alert.metric
-                                        || "Metric"
-                                    )}
-                                </span>
-
-                                <strong>
-                                    ${latest}
-                                </strong>
-
-                            </div>
-
-                            <div class="telemetry-alert-kind-row">
-
-                                <span class="telemetry-alert-kind">
-                                    ${kind.toUpperCase()}
-                                </span>
-
-                                ${reference}
-
-                                ${delta}
-
-                            </div>
-
-                        </button>
-                    `;
-                }
-            )
-            .join("");
-}
-
-
-function formatTelemetryAlertValue(
-    value,
-    unit
-) {
-
-    const numeric =
-        Number(value);
-
-    if (!Number.isFinite(numeric)) {
-        return "--";
-    }
-
-    const absolute =
-        Math.abs(numeric);
-
-    const decimals =
-        absolute >= 100
-            ? 0
-            : absolute >= 10
-                ? 1
-                : 2;
-
-    return (
-        numeric.toFixed(decimals)
-        +
-        escapeHtml(
-            unit || ""
-        )
-    );
-}
-
-
-function focusTelemetryAlertAsset(
-    assetId
-) {
-
-    const point =
-        infrastructureData.find(
-            item =>
-                Number(item.id)
-                ===
-                Number(assetId)
-        );
-
-    if (!point) {
-        return;
-    }
-
-    selectHistoryAsset(
-        assetId,
-        true
-    );
-
-    focusAsset(
-        point.latitude,
-        point.longitude
-    );
-
-    const marker =
-        assetMarkers.get(
-            Number(assetId)
-        );
-
-    if (!marker) {
-        return;
-    }
-
-    setTimeout(
-        () => {
-
-            if (
-                clusterGroup
-                &&
-                typeof clusterGroup.zoomToShowLayer
-                === "function"
-            ) {
-
-                clusterGroup.zoomToShowLayer(
-                    marker,
-                    () => {
-                        marker.openPopup();
-                    }
-                );
-            }
-
-            else {
-                marker.openPopup();
-            }
-        },
-        450
-    );
-}
-
-
-async function loadTelemetryAlerts() {
-
-    try {
-
-        const response =
-            await fetch(
-                `${API_URL}/telemetry-alerts`
-            );
-
-        if (!response.ok) {
-
-            throw new Error(
-                "Telemetry alerts request failed"
-            );
-        }
-
-        const payload =
-            await response.json();
-
-        if (
-            payload.source
-            !== "LOCAL_PROJECT"
-            ||
-            payload.external
-            !== false
-        ) {
-
-            throw new Error(
-                "Unexpected telemetry alert source"
-            );
-        }
-
-        telemetryAlertData =
-            payload.alerts
-            || [];
-
-        telemetryAlertWindowMinutes =
-            Number(
-                payload.window_minutes
-                || 5
-            );
-
-        updateTelemetryAlertSummary(
-            payload.summary
-            || {}
-        );
-
-        renderTelemetryAlerts();
-
-        setTelemetryAlertStatus(
-            "live",
-            "LIVE"
-        );
-    }
-
-    catch (error) {
-
-        console.error(
-            "Telemetry alerts load error:",
-            error
-        );
-
-        setTelemetryAlertStatus(
-            "error",
-            "ERROR"
-        );
-    }
-}
-
-
-function connectTelemetryAlertSocket() {
-
-    telemetryAlertSocket =
-        new WebSocket(
-            `${getWebSocketBaseURL()}/ws/telemetry-alerts`
-        );
-
-    telemetryAlertSocket.onopen =
-        () => {
-
-            console.log(
-                "Telemetry alert WebSocket connected"
-            );
-
-            setTelemetryAlertStatus(
-                "live",
-                "LIVE"
-            );
-        };
-
-    telemetryAlertSocket.onmessage =
-        event => {
-
-            try {
-
-                const message =
-                    JSON.parse(
-                        event.data
-                    );
-
-                if (
-                    message.type
-                    !== "telemetry_alerts"
-                ) {
-
-                    return;
-                }
-
-                if (
-                    message.source
-                    !== "LOCAL_PROJECT"
-                    ||
-                    message.external
-                    !== false
-                ) {
-
-                    console.warn(
-                        "Rejected unexpected telemetry alert stream."
-                    );
-
-                    return;
-                }
-
-                telemetryAlertData =
-                    message.alerts
-                    || [];
-
-                telemetryAlertWindowMinutes =
-                    Number(
-                        message.window_minutes
-                        || 5
-                    );
-
-                updateTelemetryAlertSummary(
-                    message.summary
-                    || {}
-                );
-
-                renderTelemetryAlerts();
-
-                loadPersistedTelemetryAlerts();
-
-                setTelemetryAlertStatus(
-                    "live",
-                    "LIVE"
-                );
-            }
-
-            catch (error) {
-
-                console.error(
-                    "Telemetry alert WebSocket message error:",
-                    error
-                );
-            }
-        };
-
-    telemetryAlertSocket.onerror =
-        error => {
-
-            console.error(
-                "Telemetry alert WebSocket error:",
-                error
-            );
-
-            setTelemetryAlertStatus(
-                "error",
-                "ERROR"
-            );
-        };
-
-    telemetryAlertSocket.onclose =
-        () => {
-
-            console.log(
-                "Telemetry alert WebSocket disconnected. Reconnecting..."
-            );
-
-            setTelemetryAlertStatus(
-                "connecting",
-                "RECONNECTING"
-            );
-
-            setTimeout(
-                connectTelemetryAlertSocket,
-                5000
-            );
-        };
-}
-
-
-/* =========================================================
-   PHASE 6.6
-   PERSISTED TELEMETRY ALERT LIFECYCLE
-========================================================= */
-
-function setPersistedAlertStatus(
-    state,
-    text
-) {
-
-    const element =
-        document.getElementById(
-            "persistedAlertStatus"
-        );
-
-    if (!element) {
-        return;
-    }
-
-    element.className =
-        `persisted-alert-status ${state}`;
-
-    element.textContent =
-        text;
-}
-
-
-function getPersistedAlertOperator() {
-
-    const input =
-        document.getElementById(
-            "persistedAlertOperator"
-        );
-
-    const value =
-        input
-            ? input.value.trim()
-            : "";
-
-    return value || "operator";
-}
-
-
-function formatAlertTimestamp(
-    value
-) {
-
-    if (!value) {
-        return "—";
-    }
-
-    const date =
-        new Date(
-            value
-        );
-
-    if (
-        Number.isNaN(
-            date.getTime()
-        )
-    ) {
-        return String(value);
-    }
-
-    return date.toLocaleString();
-}
-
-
-function calculatePersistedAlertCounts() {
-
-    return persistedTelemetryAlerts.reduce(
-        (
-            summary,
-            alert
-        ) => {
-
-            const status =
-                String(
-                    alert.status
-                    || "active"
-                );
-
-            if (
-                Object.prototype.hasOwnProperty.call(
-                    summary,
-                    status
-                )
-            ) {
-
-                summary[
-                    status
-                ] += 1;
-            }
-
-            return summary;
-        },
-        {
-            active: 0,
-            acknowledged: 0,
-            resolved: 0
-        }
-    );
-}
-
-
-function updatePersistedAlertSummary() {
-
-    const summary =
-        calculatePersistedAlertCounts();
-
-    setTextIfExists(
-        "persistedAlertActive",
-        summary.active
-    );
-
-    setTextIfExists(
-        "persistedAlertAcknowledged",
-        summary.acknowledged
-    );
-
-    setTextIfExists(
-        "persistedAlertResolved",
-        summary.resolved
-    );
-
-    const meta =
-        document.getElementById(
-            "persistedAlertMeta"
-        );
-
-    if (meta) {
-
-        const lastUpdated =
-            persistedAlertLastUpdatedAt
-                ? persistedAlertLastUpdatedAt.toLocaleTimeString()
-                : "—";
-
-        meta.textContent =
-            `${persistedTelemetryAlerts.length} persisted · `
-            +
-            `updated ${lastUpdated}`;
-    }
-}
-
-
-function persistedAlertStatusLabel(
-    status
-) {
-
-    const value =
-        String(
-            status
-            || "active"
-        ).toLowerCase();
-
-    if (
-        value
-        === "acknowledged"
-    ) {
-
-        return "ACKNOWLEDGED";
-    }
-
-    if (
-        value
-        === "resolved"
-    ) {
-
-        return "RESOLVED";
-    }
-
-    return "ACTIVE";
-}
-
-
-function renderPersistedAlerts() {
-
-    const container =
-        document.getElementById(
-            "persistedAlertFeed"
-        );
-
-    if (!container) {
-        return;
-    }
-
-    const statusSelect =
-        document.getElementById(
-            "persistedAlertStatusFilter"
-        );
-
-    const severitySelect =
-        document.getElementById(
-            "persistedAlertSeverityFilter"
-        );
-
-    const selectedStatus =
-        statusSelect
-            ? statusSelect.value
-            : "all";
-
-    const selectedSeverity =
-        severitySelect
-            ? severitySelect.value
-            : "all";
-
-    const alerts =
-        persistedTelemetryAlerts.filter(
-            alert => {
-
-                const matchesStatus =
-                    selectedStatus === "all"
-                    ||
-                    alert.status === selectedStatus;
-
-                const matchesSeverity =
-                    selectedSeverity === "all"
-                    ||
-                    alert.severity === selectedSeverity;
-
-                return (
-                    matchesStatus
-                    &&
-                    matchesSeverity
-                );
-            }
-        );
-
-    if (
-        alerts.length === 0
-    ) {
-
-        container.innerHTML = `
-            <div class="empty-state">
-                No persisted alerts match the selected filters.
-            </div>
-        `;
-
-        return;
-    }
-
-    container.innerHTML =
-        alerts
-            .slice(
-                0,
-                100
-            )
-            .map(
-                alert => {
-
-                    const id =
-                        Number(
-                            alert.id
-                        );
-
-                    const assetId =
-                        Number(
-                            alert.asset_id
-                        );
-
-                    const severity =
-                        escapeHtml(
-                            alert.severity
-                            || "low"
-                        );
-
-                    const status =
-                        escapeHtml(
-                            alert.status
-                            || "active"
-                        );
-
-                    const canAcknowledge =
-                        status === "active";
-
-                    const canResolve =
-                        (
-                            status === "active"
-                            ||
-                            status === "acknowledged"
-                        );
-
-                    const latestValue =
-                        formatTelemetryAlertValue(
-                            alert.latest_value,
-                            alert.unit
-                        );
-
-                    return `
-                        <article
-                            class="
-                                persisted-alert-card
-                                severity-${severity}
-                                status-${status}
-                            "
-                            data-alert-id="${id}"
-                        >
-
-                            <div class="persisted-alert-card-header">
-
-                                <button
-                                    type="button"
-                                    class="persisted-alert-asset"
-                                    data-focus-asset="${assetId}"
-                                >
-                                    ${escapeHtml(
-                                        String(
-                                            alert.asset_name
-                                            || `Asset ${assetId}`
-                                        )
-                                    )}
-                                </button>
-
-                                <div class="persisted-alert-badges">
-
-                                    <span
-                                        class="
-                                            persisted-alert-badge
-                                            severity-${severity}
-                                        "
-                                    >
-                                        ${severity.toUpperCase()}
-                                    </span>
-
-                                    <span
-                                        class="
-                                            persisted-alert-badge
-                                            state-${status}
-                                        "
-                                    >
-                                        ${persistedAlertStatusLabel(
-                                            status
-                                        )}
-                                    </span>
-
-                                </div>
-
-                            </div>
-
-                            <div class="persisted-alert-message">
-                                ${escapeHtml(
-                                    alert.message
-                                    || "Telemetry alert"
-                                )}
-                            </div>
-
-                            <div class="persisted-alert-metric">
-
-                                <span>
-                                    ${escapeHtml(
-                                        alert.metric_label
-                                        || alert.metric
-                                        || "Metric"
-                                    )}
-                                </span>
-
-                                <strong>
-                                    ${latestValue}
-                                </strong>
-
-                            </div>
-
-                            <div class="persisted-alert-times">
-
-                                <span>
-                                    First:
-                                    ${escapeHtml(
-                                        formatAlertTimestamp(
-                                            alert.first_seen_at
-                                        )
-                                    )}
-                                </span>
-
-                                <span>
-                                    Last:
-                                    ${escapeHtml(
-                                        formatAlertTimestamp(
-                                            alert.last_seen_at
-                                        )
-                                    )}
-                                </span>
-
-                                ${
-                                    alert.acknowledged_at
-                                        ? `
-                                            <span>
-                                                Ack:
-                                                ${escapeHtml(
-                                                    formatAlertTimestamp(
-                                                        alert.acknowledged_at
-                                                    )
-                                                )}
-                                                ${
-                                                    alert.acknowledged_by
-                                                        ? ` · ${escapeHtml(alert.acknowledged_by)}`
-                                                        : ""
-                                                }
-                                            </span>
-                                        `
-                                        : ""
-                                }
-
-                                ${
-                                    alert.resolved_at
-                                        ? `
-                                            <span>
-                                                Resolved:
-                                                ${escapeHtml(
-                                                    formatAlertTimestamp(
-                                                        alert.resolved_at
-                                                    )
-                                                )}
-                                                ${
-                                                    alert.resolved_by
-                                                        ? ` · ${escapeHtml(alert.resolved_by)}`
-                                                        : ""
-                                                }
-                                            </span>
-                                        `
-                                        : ""
-                                }
-
-                            </div>
-
-                            ${
-                                alert.resolution_note
-                                    ? `
-                                        <div class="persisted-alert-note">
-                                            ${escapeHtml(
-                                                alert.resolution_note
-                                            )}
-                                        </div>
-                                    `
-                                    : ""
-                            }
-
-                            <div class="persisted-alert-actions">
-
-                                <button
-                                    type="button"
-                                    class="persisted-alert-action history"
-                                    data-alert-action="history"
-                                    data-alert-id="${id}"
-                                >
-                                    History
-                                </button>
-
-                                <button
-                                    type="button"
-                                    class="persisted-alert-action acknowledge"
-                                    data-alert-action="acknowledge"
-                                    data-alert-id="${id}"
-                                    ${canAcknowledge ? "" : "disabled"}
-                                >
-                                    Acknowledge
-                                </button>
-
-                                <button
-                                    type="button"
-                                    class="persisted-alert-action resolve"
-                                    data-alert-action="resolve"
-                                    data-alert-id="${id}"
-                                    ${canResolve ? "" : "disabled"}
-                                >
-                                    Resolve
-                                </button>
-
-                            </div>
-
-                        </article>
-                    `;
-                }
-            )
-            .join("");
-}
-
-
-async function loadPersistedTelemetryAlerts() {
-
-    if (
-        persistedAlertRequestInFlight
-    ) {
-        return;
-    }
-
-    persistedAlertRequestInFlight =
-        true;
-
-    setPersistedAlertStatus(
-        "loading",
-        "LOADING"
-    );
-
-    try {
-
-        const response =
-            await fetch(
-                `${API_URL}/telemetry-alert-history?limit=1000`
-            );
-
-        if (!response.ok) {
-
-            throw new Error(
-                `Persisted alert request failed (${response.status})`
-            );
-        }
-
-        const payload =
-            await response.json();
-
-        if (
-            payload.source
-            !== "LOCAL_PROJECT"
-            ||
-            payload.external
-            !== false
-        ) {
-
-            throw new Error(
-                "Unexpected persisted alert source"
-            );
-        }
-
-        persistedTelemetryAlerts =
-            Array.isArray(
-                payload.alerts
-            )
-                ? payload.alerts
-                : [];
-
-        persistedAlertLastUpdatedAt =
-            new Date();
-
-        updatePersistedAlertSummary();
-
-        renderPersistedAlerts();
-
-        setPersistedAlertStatus(
-            "ready",
-            "READY"
-        );
-    }
-
-    catch (error) {
-
-        console.error(
-            "Persisted telemetry alert load error:",
-            error
-        );
-
-        setPersistedAlertStatus(
-            "error",
-            "ERROR"
-        );
-
-        const container =
-            document.getElementById(
-                "persistedAlertFeed"
-            );
-
-        if (container) {
-
-            container.innerHTML = `
-                <div class="empty-state error-state">
-                    Unable to load persisted alerts.
-                </div>
-            `;
-        }
-    }
-
-    finally {
-
-        persistedAlertRequestInFlight =
-            false;
-    }
-}
-
-
-async function postPersistedAlertAction(
-    alertId,
-    action
-) {
-
-    const alert =
-        persistedTelemetryAlerts.find(
-            item =>
-                Number(
-                    item.id
-                )
-                ===
-                Number(
-                    alertId
-                )
-        );
-
-    if (!alert) {
-        return;
-    }
-
-    const operator =
-        getPersistedAlertOperator();
-
-    let note =
-        null;
-
-    if (
-        action === "acknowledge"
-    ) {
-
-        note =
-            window.prompt(
-                "Acknowledgement note (optional):",
-                "Investigating telemetry alert"
-            );
-
-        if (
-            note === null
-        ) {
-            return;
-        }
-    }
-
-    else if (
-        action === "resolve"
-    ) {
-
-        note =
-            window.prompt(
-                "Resolution note:",
-                "Issue investigated and resolved"
-            );
-
-        if (
-            note === null
-        ) {
-            return;
-        }
-    }
-
-    const endpoint =
-        action === "acknowledge"
-            ? "acknowledge"
-            : "resolve";
-
-    setPersistedAlertStatus(
-        "loading",
-        "UPDATING"
-    );
-
-    try {
-
-        const response =
-            await fetch(
-                `${API_URL}/telemetry-alerts/${Number(alertId)}/${endpoint}`,
-                {
-                    method: "POST",
-
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
-
-                    body: JSON.stringify(
-                        {
-                            changed_by:
-                                operator,
-
-                            note:
-                                note
-                                ? note.trim()
-                                : null
-                        }
-                    )
-                }
-            );
-
-        const payload =
-            await response.json()
-                .catch(
-                    () => ({})
-                );
-
-        if (!response.ok) {
-
-            throw new Error(
-                payload.detail
-                ||
-                `Alert ${endpoint} failed (${response.status})`
-            );
-        }
-
-        await loadPersistedTelemetryAlerts();
-
-        if (
-            selectedPersistedAlertId
-            ===
-            Number(
-                alertId
-            )
-        ) {
-
-            await openAlertHistory(
-                alertId
-            );
-        }
-    }
-
-    catch (error) {
-
-        console.error(
-            `Persisted alert ${endpoint} error:`,
-            error
-        );
-
-        setPersistedAlertStatus(
-            "error",
-            "ERROR"
-        );
-
-        window.alert(
-            error.message
-            ||
-            `Unable to ${endpoint} alert.`
-        );
-    }
-}
-
-
-function closeAlertHistory() {
-
-    const modal =
-        document.getElementById(
-            "alertHistoryModal"
-        );
-
-    if (!modal) {
-        return;
-    }
-
-    modal.classList.remove(
-        "open"
-    );
-
-    modal.setAttribute(
-        "aria-hidden",
-        "true"
-    );
-
-    selectedPersistedAlertId =
-        null;
-}
-
-
-function renderAlertHistoryTimeline(
-    alert,
-    history
-) {
-
-    const summary =
-        document.getElementById(
-            "alertHistorySummary"
-        );
-
-    const timeline =
-        document.getElementById(
-            "alertHistoryTimeline"
-        );
-
-    if (
-        !summary
-        ||
-        !timeline
-    ) {
-
-        return;
-    }
-
-    const severity =
-        escapeHtml(
-            alert.severity
-            || "low"
-        );
-
-    const status =
-        escapeHtml(
-            alert.status
-            || "active"
-        );
-
-    summary.innerHTML = `
-        <div class="alert-history-summary-title">
-
-            <strong>
-                ${escapeHtml(
-                    alert.asset_name
-                    || `Asset ${alert.asset_id}`
-                )}
-            </strong>
-
-            <span
-                class="
-                    persisted-alert-badge
-                    severity-${severity}
-                "
-            >
-                ${severity.toUpperCase()}
-            </span>
-
-            <span
-                class="
-                    persisted-alert-badge
-                    state-${status}
-                "
-            >
-                ${persistedAlertStatusLabel(status)}
-            </span>
-
-        </div>
-
-        <div class="alert-history-summary-message">
-            ${escapeHtml(
-                alert.message
-                || "Telemetry alert"
-            )}
-        </div>
-
-        <div class="alert-history-summary-meta">
-            Alert #${Number(alert.id)}
-            · Asset #${Number(alert.asset_id)}
-            · ${escapeHtml(alert.alert_kind || "threshold")}
-        </div>
-    `;
-
-    if (
-        !Array.isArray(history)
-        ||
-        history.length === 0
-    ) {
-
-        timeline.innerHTML = `
-            <div class="empty-state">
-                No lifecycle events have been recorded for this alert.
-            </div>
-        `;
-
-        return;
-    }
-
-    timeline.innerHTML =
-        history
-            .map(
-                event => {
-
-                    const action =
-                        escapeHtml(
-                            event.action
-                            || "EVENT"
-                        );
-
-                    const fromStatus =
-                        event.from_status
-                            ? escapeHtml(
-                                event.from_status
-                            )
-                            : "—";
-
-                    const toStatus =
-                        event.to_status
-                            ? escapeHtml(
-                                event.to_status
-                            )
-                            : "—";
-
-                    return `
-                        <div class="alert-history-event">
-
-                            <div class="alert-history-event-dot"></div>
-
-                            <div class="alert-history-event-body">
-
-                                <div class="alert-history-event-header">
-
-                                    <strong>
-                                        ${action.replaceAll("_", " ")}
-                                    </strong>
-
-                                    <span>
-                                        ${escapeHtml(
-                                            formatAlertTimestamp(
-                                                event.changed_at
-                                            )
-                                        )}
-                                    </span>
-
-                                </div>
-
-                                <div class="alert-history-transition">
-                                    ${fromStatus}
-                                    <span>→</span>
-                                    ${toStatus}
-                                </div>
-
-                                ${
-                                    event.note
-                                        ? `
-                                            <div class="alert-history-event-note">
-                                                ${escapeHtml(event.note)}
-                                            </div>
-                                        `
-                                        : ""
-                                }
-
-                                <div class="alert-history-event-meta">
-                                    ${escapeHtml(event.changed_by || "SYSTEM")}
-                                    ·
-                                    ${escapeHtml(event.severity || alert.severity || "low")}
-                                </div>
-
-                            </div>
-
-                        </div>
-                    `;
-                }
-            )
-            .join("");
-}
-
-
-async function openAlertHistory(
-    alertId
-) {
-
-    const id =
-        Number(
-            alertId
-        );
-
-    const alert =
-        persistedTelemetryAlerts.find(
-            item =>
-                Number(
-                    item.id
-                )
-                === id
-        );
-
-    if (!alert) {
-        return;
-    }
-
-    selectedPersistedAlertId =
-        id;
-
-    const modal =
-        document.getElementById(
-            "alertHistoryModal"
-        );
-
-    const timeline =
-        document.getElementById(
-            "alertHistoryTimeline"
-        );
-
-    if (
-        !modal
-        ||
-        !timeline
-    ) {
-
-        return;
-    }
-
-    modal.classList.add(
-        "open"
-    );
-
-    modal.setAttribute(
-        "aria-hidden",
-        "false"
-    );
-
-    timeline.innerHTML = `
-        <div class="empty-state">
-            Loading alert history...
-        </div>
-    `;
-
-    try {
-
-        const response =
-            await fetch(
-                `${API_URL}/telemetry-alert-history/${id}/events`
-            );
-
-        if (!response.ok) {
-
-            throw new Error(
-                `Alert history request failed (${response.status})`
-            );
-        }
-
-        const payload =
-            await response.json();
-
-        if (
-            payload.source
-            !== "LOCAL_PROJECT"
-            ||
-            payload.external
-            !== false
-        ) {
-
-            throw new Error(
-                "Unexpected alert history source"
-            );
-        }
-
-        renderAlertHistoryTimeline(
-            alert,
-            payload.history
-            || []
-        );
-    }
-
-    catch (error) {
-
-        console.error(
-            "Alert history load error:",
-            error
-        );
-
-        timeline.innerHTML = `
-            <div class="empty-state error-state">
-                Unable to load lifecycle history.
-            </div>
-        `;
-    }
-}
-
-
-async function handlePersistedAlertFeedClick(
-    event
-) {
-
-    const focusButton =
-        event.target.closest(
-            "[data-focus-asset]"
-        );
-
-    if (focusButton) {
-
-        focusTelemetryAlertAsset(
-            Number(
-                focusButton.dataset.focusAsset
-            )
-        );
-
-        return;
-    }
-
-    const actionButton =
-        event.target.closest(
-            "[data-alert-action]"
-        );
-
-    if (
-        !actionButton
-        ||
-        actionButton.disabled
-    ) {
-
-        return;
-    }
-
-    const alertId =
-        Number(
-            actionButton.dataset.alertId
-        );
-
-    const action =
-        actionButton.dataset.alertAction;
-
-    if (
-        action === "history"
-    ) {
-
-        await openAlertHistory(
-            alertId
-        );
-
-        return;
-    }
-
-    if (
-        action === "acknowledge"
-        ||
-        action === "resolve"
-    ) {
-
-        await postPersistedAlertAction(
-            alertId,
-            action
-        );
-    }
-}
-
-
-/* =========================================================
-   PHASE 6.4 TELEMETRY HISTORY
-========================================================= */
-
-function setTelemetryHistoryStatus(
-    state,
-    text
-) {
-
-    const element =
-        document.getElementById(
-            "telemetryHistoryStatus"
-        );
-
-    if (!element) {
-        return;
-    }
-
-    element.className =
-        `history-status ${state}`;
-
-    element.textContent =
-        text;
-}
-
-
-
-function updateTelemetryRefreshUI() {
-
-    const button =
-        document.getElementById(
-            "toggleHistoryRefresh"
-        );
-
-    const dot =
-        document.getElementById(
-            "historyRefreshDot"
-        );
-
-    const mode =
-        document.getElementById(
-            "historyRefreshMode"
-        );
-
-    if (button) {
-
-        button.textContent =
-            telemetryHistoryPaused
-                ? "Resume"
-                : "Pause";
-
-        button.setAttribute(
-            "aria-pressed",
-            telemetryHistoryPaused
-                ? "true"
-                : "false"
-        );
-
-        button.title =
-            telemetryHistoryPaused
-                ? "Resume automatic telemetry history refresh"
-                : "Pause automatic telemetry history refresh";
-
-        button.classList.toggle(
-            "paused",
-            telemetryHistoryPaused
-        );
-    }
-
-    if (dot) {
-
-        dot.classList.toggle(
-            "live",
-            !telemetryHistoryPaused
-        );
-
-        dot.classList.toggle(
-            "paused",
-            telemetryHistoryPaused
-        );
-    }
-
-    if (mode) {
-
-        mode.textContent =
-            telemetryHistoryPaused
-                ? "Auto-refresh paused"
-                : "Auto-refresh active";
-    }
-
-    updateTelemetryLastUpdatedLabel();
-}
-
-
-function updateTelemetryLastUpdatedLabel() {
-
-    const element =
-        document.getElementById(
-            "historyLastUpdated"
-        );
-
-    if (!element) {
-        return;
-    }
-
-    if (!telemetryHistoryLastUpdatedAt) {
-
-        element.textContent =
-            "Last updated: Never";
-
-        return;
-    }
-
-    const formatted =
-        telemetryHistoryLastUpdatedAt
-            .toLocaleTimeString(
-                [],
-                {
-                    hour:
-                        "2-digit",
-
-                    minute:
-                        "2-digit",
-
-                    second:
-                        "2-digit"
-                }
-            );
-
-    element.textContent =
-        `Last updated: ${formatted}`;
-}
-
-
-function toggleTelemetryHistoryRefresh() {
-
-    telemetryHistoryPaused =
-        !telemetryHistoryPaused;
-
-    if (
-        telemetryHistoryPaused
-    ) {
-
-        if (
-            telemetryHistoryTimer
-            != null
-        ) {
-
-            clearInterval(
-                telemetryHistoryTimer
-            );
-
-            telemetryHistoryTimer =
-                null;
-        }
-
-        setTelemetryHistoryStatus(
-            "paused",
-            "PAUSED"
-        );
-    }
-
-    else {
-
-        startTelemetryHistoryRefresh();
-
-        setTelemetryHistoryStatus(
-            "ready",
-            "LIVE"
-        );
-
-        if (
-            selectedHistoryAssetId
-            != null
-        ) {
-
-            loadTelemetryHistory();
-        }
-    }
-
-    updateTelemetryRefreshUI();
-}
-
-
-function selectHistoryAsset(
-    assetId,
-    loadNow = true
-) {
-
-    const id =
-        Number(assetId);
-
-    if (
-        !Number.isFinite(id)
-        ||
-        id <= 0
-    ) {
-
-        return;
-    }
-
-    selectedHistoryAssetId =
-        id;
-
-    const select =
-        document.getElementById(
-            "historyAsset"
-        );
-
-    if (select) {
-        select.value =
-            String(id);
-    }
-
-    if (loadNow) {
-        loadTelemetryHistory();
-    }
-}
-
-
-async function loadTelemetryHistory() {
-
-    const assetSelect =
-        document.getElementById(
-            "historyAsset"
-        );
-
-    const rangeSelect =
-        document.getElementById(
-            "historyRange"
-        );
-
-    const assetId =
-        Number(
-            assetSelect?.value
-            || selectedHistoryAssetId
-            || 0
-        );
-
-    const hours =
-        Number(
-            rangeSelect?.value
-            || 24
-        );
-
-    if (
-        !Number.isFinite(assetId)
-        ||
-        assetId <= 0
-    ) {
-
-        showTelemetryHistoryEmpty(
-            "Select an infrastructure asset to load persisted telemetry history."
-        );
-
-        return;
-    }
-
-    selectedHistoryAssetId =
-        assetId;
-
-    setTelemetryHistoryStatus(
-        "loading",
-        "LOADING"
-    );
-
-    try {
-
-        const [
-            historyResponse,
-            summaryResponse
-        ] = await Promise.all(
-            [
-                fetch(
-                    `${API_URL}/telemetry-history/${assetId}?hours=${hours}&limit=5000`
-                ),
-
-                fetch(
-                    `${API_URL}/telemetry-summary/${assetId}?hours=${hours}`
-                )
-            ]
-        );
-
-        if (!historyResponse.ok) {
-
-            throw new Error(
-                "Telemetry history request failed"
-            );
-        }
-
-        if (!summaryResponse.ok) {
-
-            throw new Error(
-                "Telemetry summary request failed"
-            );
-        }
-
-        const historyPayload =
-            await historyResponse.json();
-
-        const summaryPayload =
-            await summaryResponse.json();
-
-        if (
-            historyPayload.source !== "LOCAL_PROJECT"
-            ||
-            historyPayload.external !== false
-        ) {
-
-            throw new Error(
-                "Unexpected telemetry history source"
-            );
-        }
-
-        if (
-            summaryPayload.source !== "LOCAL_PROJECT"
-            ||
-            summaryPayload.external !== false
-        ) {
-
-            throw new Error(
-                "Unexpected telemetry summary source"
-            );
-        }
-
-        telemetryHistoryRecords =
-            Array.isArray(
-                historyPayload.records
-            )
-                ? historyPayload.records
-                : [];
-
-        renderTelemetryHistory(
-            telemetryHistoryRecords,
-            summaryPayload.summary || {}
-        );
-
-        telemetryHistoryLastUpdatedAt =
-            new Date();
-
-        updateTelemetryLastUpdatedLabel();
-
-        if (
-            telemetryHistoryPaused
-        ) {
-
-            setTelemetryHistoryStatus(
-                "paused",
-                "PAUSED"
-            );
-        }
-
-        else {
-
-            setTelemetryHistoryStatus(
-                "ready",
-                "LIVE"
-            );
-        }
-
-    }
-
-    catch (error) {
-
-        console.error(
-            "Telemetry history load error:",
-            error
-        );
-
-        setTelemetryHistoryStatus(
-            "error",
-            "ERROR"
-        );
-
-        showTelemetryHistoryEmpty(
-            "Unable to load telemetry history. Check the Phase 6.4 backend API."
-        );
-    }
-}
-
-
-function showTelemetryHistoryEmpty(message) {
-
-    const empty =
-        document.getElementById(
-            "telemetryHistoryEmpty"
-        );
-
-    const charts =
-        document.getElementById(
-            "telemetryCharts"
-        );
-
-    if (empty) {
-
-        empty.textContent =
-            message;
-
-        empty.classList.remove(
-            "hidden"
-        );
-    }
-
-    if (charts) {
-
-        charts.classList.add(
-            "hidden"
-        );
-    }
-
-    setTextIfExists(
-        "historySamples",
-        "0"
-    );
-
-    setTextIfExists(
-        "historyAvgHealth",
-        "--"
-    );
-
-    setTextIfExists(
-        "historyAvgCpu",
-        "--"
-    );
-
-    setTextIfExists(
-        "historyAvgTemp",
-        "--"
-    );
-}
-
-
-function renderTelemetryHistory(
-    records,
-    summary
-) {
-
-    const chronological =
-        [...records]
-            .reverse();
-
-    setTextIfExists(
-        "historySamples",
-        Number(
-            summary.samples
-            ?? records.length
-            ?? 0
-        )
-    );
-
-    setTextIfExists(
-        "historyAvgHealth",
-        formatMetricValue(
-            summary.avg_health,
-            "%",
-            1
-        )
-    );
-
-    setTextIfExists(
-        "historyAvgCpu",
-        formatMetricValue(
-            summary.avg_cpu_percent,
-            "%",
-            1
-        )
-    );
-
-    setTextIfExists(
-        "historyAvgTemp",
-        formatMetricValue(
-            summary.avg_temperature_c,
-            "°C",
-            1
-        )
-    );
-
-    if (
-        chronological.length === 0
-    ) {
-
-        showTelemetryHistoryEmpty(
-            "No historical telemetry exists for this asset in the selected time range yet."
-        );
-
-        return;
-    }
-
-    const empty =
-        document.getElementById(
-            "telemetryHistoryEmpty"
-        );
-
-    const charts =
-        document.getElementById(
-            "telemetryCharts"
-        );
-
-    if (empty) {
-        empty.classList.add(
-            "hidden"
-        );
-    }
-
-    if (charts) {
-        charts.classList.remove(
-            "hidden"
-        );
-    }
-
-    const latest =
-        chronological[
-            chronological.length - 1
-        ];
-
-    setTextIfExists(
-        "historyHealthLatest",
-        formatMetricValue(
-            latest.health,
-            "%",
-            0
-        )
-    );
-
-    setTextIfExists(
-        "historyCpuLatest",
-        formatMetricValue(
-            latest.cpu_percent,
-            "%",
-            1
-        )
-    );
-
-    setTextIfExists(
-        "historyTempLatest",
-        formatMetricValue(
-            latest.temperature_c,
-            "°C",
-            1
-        )
-    );
-
-    setTextIfExists(
-        "historyLatencyLatest",
-        formatMetricValue(
-            latest.latency_ms,
-            " ms",
-            1
-        )
-    );
-
-    setTextIfExists(
-        "historyPacketLossLatest",
-        formatMetricValue(
-            latest.packet_loss_percent,
-            "%",
-            2
-        )
-    );
-
-    renderTelemetryMultiSeriesChart(
-        "healthHistoryChart",
-        chronological
-    );
-}
-
-
-function renderTelemetryMultiSeriesChart(
-    containerId,
-    records
-) {
-
-    const container =
-        document.getElementById(
-            containerId
-        );
-
-    if (!container) {
-        return;
-    }
-
-    const source =
-        Array.isArray(records)
-            ? records.filter(
-                item =>
-                    item
-                    &&
-                    item.recorded_at
-            )
-            : [];
-
-    if (source.length < 2) {
-
-        container.innerHTML = `
-            <div class="chart-empty-state">
-                Waiting for enough historical samples...
-            </div>
-        `;
-
-        return;
-    }
-
-    const width = 1000;
-    const height = 245;
-
-    const padding = {
-        left: 48,
-        right: 18,
-        top: 16,
-        bottom: 32
-    };
-
-    const plotWidth =
-        width
-        -
-        padding.left
-        -
-        padding.right;
-
-    const plotHeight =
-        height
-        -
-        padding.top
-        -
-        padding.bottom;
-
-    const metricDefinitions = [
-        {
-            key: "cpu_percent",
-            label: "CPU",
-            color: "#25c8ff",
-            min: 0,
-            max: 100
-        },
-        {
-            key: "health",
-            label: "Health",
-            color: "#28e4a3",
-            min: 0,
-            max: 100
-        },
-        {
-            key: "temperature_c",
-            label: "Temperature",
-            color: "#ffb547"
-        },
-        {
-            key: "latency_ms",
-            label: "Latency",
-            color: "#a96cff"
-        },
-        {
-            key: "packet_loss_percent",
-            label: "Packet Loss",
-            color: "#ff5b78"
-        }
-    ];
-
-    function finiteValues(metric) {
-
-        return source
-            .map(
-                row =>
-                    Number(
-                        row[metric.key]
-                    )
-            )
-            .filter(
-                Number.isFinite
-            );
-    }
-
-    function bounds(metric) {
-
-        const values =
-            finiteValues(
-                metric
-            );
-
-        if (!values.length) {
-
-            return {
-                min: 0,
-                max: 1
-            };
-        }
-
-        let min =
-            Number.isFinite(
-                metric.min
-            )
-                ? metric.min
-                : Math.min(
-                    ...values
-                );
-
-        let max =
-            Number.isFinite(
-                metric.max
-            )
-                ? metric.max
-                : Math.max(
-                    ...values
-                );
-
-        if (max === min) {
-
-            const margin =
-                Math.max(
-                    Math.abs(max) * 0.08,
-                    1
-                );
-
-            min -= margin;
-            max += margin;
-        }
-
-        else if (
-            !Number.isFinite(
-                metric.min
-            )
-            ||
-            !Number.isFinite(
-                metric.max
-            )
-        ) {
-
-            const margin =
-                (
-                    max
-                    -
-                    min
-                )
-                *
-                0.12;
-
-            min -= margin;
-            max += margin;
-        }
-
-        return {
-            min,
-            max
-        };
-    }
-
-    function pointFor(
-        row,
-        index,
-        metric,
-        metricBounds
-    ) {
-
-        const value =
-            Number(
-                row[
-                    metric.key
-                ]
-            );
-
-        if (!Number.isFinite(value)) {
-            return null;
-        }
-
-        const x =
-            padding.left
-            +
-            (
-                index
-                /
-                Math.max(
-                    source.length - 1,
-                    1
-                )
-            )
-            *
-            plotWidth;
-
-        const ratio =
-            Math.max(
-                0,
-                Math.min(
-                    1,
-                    (
-                        value
-                        -
-                        metricBounds.min
-                    )
-                    /
-                    (
-                        metricBounds.max
-                        -
-                        metricBounds.min
-                    )
-                )
-            );
-
-        const y =
-            padding.top
-            +
-            (
-                1
-                -
-                ratio
-            )
-            *
-            plotHeight;
-
-        return {
-            x,
-            y
-        };
-    }
-
-    const seriesMarkup =
-        metricDefinitions
-            .map(
-                metric => {
-
-                    const metricBounds =
-                        bounds(
-                            metric
-                        );
-
-                    const points =
-                        source
-                            .map(
-                                (
-                                    row,
-                                    index
-                                ) =>
-                                    pointFor(
-                                        row,
-                                        index,
-                                        metric,
-                                        metricBounds
-                                    )
-                            )
-                            .filter(Boolean);
-
-                    if (
-                        points.length
-                        <
-                        2
-                    ) {
-                        return "";
-                    }
-
-                    const pointString =
-                        points
-                            .map(
-                                point =>
-                                    `${point.x.toFixed(1)},${point.y.toFixed(1)}`
-                            )
-                            .join(" ");
-
-                    return `
-                        <polyline
-                            points="${pointString}"
-                            fill="none"
-                            stroke="${metric.color}"
-                            stroke-width="2.4"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            vector-effect="non-scaling-stroke"
-                            opacity="0.96"
-                        ></polyline>
-                    `;
-                }
-            )
-            .join("");
-
-    const horizontalGrid =
-        [0, 0.25, 0.5, 0.75, 1]
-            .map(
-                ratio => {
-
-                    const y =
-                        padding.top
-                        +
-                        ratio
-                        *
-                        plotHeight;
-
-                    const label =
-                        Math.round(
-                            100
-                            -
-                            ratio * 100
-                        );
-
-                    return `
-                        <line
-                            x1="${padding.left}"
-                            y1="${y}"
-                            x2="${padding.left + plotWidth}"
-                            y2="${y}"
-                            stroke="rgba(111,151,183,0.13)"
-                            stroke-width="1"
-                            vector-effect="non-scaling-stroke"
-                        ></line>
-
-                        <text
-                            x="8"
-                            y="${y + 4}"
-                            fill="#6f879b"
-                            font-size="11"
-                            font-family="Inter,system-ui,sans-serif"
-                        >${label}%</text>
-                    `;
-                }
-            )
-            .join("");
-
-    const sampleIndexes =
-        [
-            0,
-            Math.floor(
-                (source.length - 1)
-                *
-                0.25
-            ),
-            Math.floor(
-                (source.length - 1)
-                *
-                0.5
-            ),
-            Math.floor(
-                (source.length - 1)
-                *
-                0.75
-            ),
-            source.length - 1
-        ];
-
-    const verticalGrid =
-        sampleIndexes
-            .map(
-                index => {
-
-                    const x =
-                        padding.left
-                        +
-                        (
-                            index
-                            /
-                            Math.max(
-                                source.length - 1,
-                                1
-                            )
-                        )
-                        *
-                        plotWidth;
-
-                    const timestamp =
-                        new Date(
-                            source[
-                                index
-                            ].recorded_at
-                        );
-
-                    const label =
-                        Number.isNaN(
-                            timestamp.getTime()
-                        )
-                            ? "--:--"
-                            : timestamp.toLocaleTimeString(
-                                [],
-                                {
-                                    hour: "2-digit",
-                                    minute: "2-digit"
-                                }
-                            );
-
-                    return `
-                        <line
-                            x1="${x}"
-                            y1="${padding.top}"
-                            x2="${x}"
-                            y2="${padding.top + plotHeight}"
-                            stroke="rgba(111,151,183,0.07)"
-                            stroke-width="1"
-                            vector-effect="non-scaling-stroke"
-                        ></line>
-
-                        <text
-                            x="${x}"
-                            y="${height - 8}"
-                            text-anchor="${
-                                index === 0
-                                    ? "start"
-                                    : index === source.length - 1
-                                        ? "end"
-                                        : "middle"
-                            }"
-                            fill="#6f879b"
-                            font-size="11"
-                            font-family="Inter,system-ui,sans-serif"
-                        >${label}</text>
-                    `;
-                }
-            )
-            .join("");
-
-    container.innerHTML = `
-        <svg
-            viewBox="0 0 ${width} ${height}"
-            preserveAspectRatio="none"
-            role="img"
-            aria-label="Multi-series telemetry history"
-            style="
-                display:block;
-                width:100%;
-                height:100%;
-                overflow:hidden;
-            "
-        >
-            ${horizontalGrid}
-            ${verticalGrid}
-            ${seriesMarkup}
-        </svg>
-    `;
-}
-
-
-
-function formatMetricValue(
-    value,
-    suffix = "",
-    decimals = 1
-) {
-
-    const numeric =
-        Number(value);
-
-    if (!Number.isFinite(numeric)) {
-        return "--";
-    }
-
-    return (
-        numeric.toFixed(decimals)
-        +
-        suffix
-    );
-}
-
-
-function renderTelemetryLineChart(
-    containerId,
-    records,
-    metricKey,
-    options = {}
-) {
-
-    const container =
-        document.getElementById(
-            containerId
-        );
-
-    if (!container) {
-        return;
-    }
-
-    const points =
-        records
-            .map(
-                record => ({
-                    value:
-                        Number(
-                            record[
-                                metricKey
-                            ]
-                        ),
-
-                    timestamp:
-                        record.recorded_at
-                })
-            )
-            .filter(
-                point =>
-                    Number.isFinite(
-                        point.value
-                    )
-            );
-
-    if (
-        points.length === 0
-    ) {
-
-        container.innerHTML = `
-            <div class="chart-empty-state">
-                No samples
-            </div>
-        `;
-
-        return;
-    }
-
-    const width = 300;
-    const height = 105;
-
-    const padding = {
-        top: 10,
-        right: 8,
-        bottom: 24,
-        left: 34
-    };
-
-    const values =
-        points.map(
-            point =>
-                point.value
-        );
-
-    let minValue =
-        Number.isFinite(
-            Number(options.min)
-        )
-            ? Number(options.min)
-            : Math.min(
-                ...values
-            );
-
-    let maxValue =
-        Number.isFinite(
-            Number(options.max)
-        )
-            ? Number(options.max)
-            : Math.max(
-                ...values
-            );
-
-    const extraPadding =
-        Number(
-            options.padding
-            ?? 2
-        );
-
-    if (
-        options.min == null
-    ) {
-        minValue -= extraPadding;
-    }
-
-    if (
-        options.max == null
-    ) {
-        maxValue += extraPadding;
-    }
-
-    if (
-        maxValue <= minValue
-    ) {
-        maxValue =
-            minValue + 1;
-    }
-
-    const plotWidth =
-        width
-        -
-        padding.left
-        -
-        padding.right;
-
-    const plotHeight =
-        height
-        -
-        padding.top
-        -
-        padding.bottom;
-
-    const xForIndex =
-        index => {
-
-            if (
-                points.length === 1
-            ) {
-                return (
-                    padding.left
-                    +
-                    plotWidth / 2
-                );
-            }
-
-            return (
-                padding.left
-                +
-                (
-                    index
-                    /
-                    (
-                        points.length
-                        - 1
-                    )
-                )
-                *
-                plotWidth
-            );
-        };
-
-    const yForValue =
-        value =>
-            padding.top
-            +
-            (
-                1
-                -
-                (
-                    value
-                    -
-                    minValue
-                )
-                /
-                (
-                    maxValue
-                    -
-                    minValue
-                )
-            )
-            *
-            plotHeight;
-
-    const polyline =
-        points
-            .map(
-                (point, index) =>
-                    `${xForIndex(index).toFixed(1)},${yForValue(point.value).toFixed(1)}`
-            )
-            .join(" ");
-
-    const area =
-        [
-            `${padding.left},${padding.top + plotHeight}`,
-            ...points.map(
-                (point, index) =>
-                    `${xForIndex(index).toFixed(1)},${yForValue(point.value).toFixed(1)}`
-            ),
-            `${padding.left + plotWidth},${padding.top + plotHeight}`
-        ]
-        .join(" ");
-
-    const firstTime =
-        formatChartTime(
-            points[0].timestamp
-        );
-
-    const lastTime =
-        formatChartTime(
-            points[
-                points.length - 1
-            ].timestamp
-        );
-
-    const decimals =
-        Number(
-            options.decimals
-            ?? 1
-        );
-
-    const suffix =
-        options.suffix
-        ?? "";
-
-    const yMaxLabel =
-        `${maxValue.toFixed(decimals)}${suffix}`;
-
-    const yMinLabel =
-        `${minValue.toFixed(decimals)}${suffix}`;
-
-    const latestPoint =
-        points[
-            points.length - 1
-        ];
-
-    const latestX =
-        xForIndex(
-            points.length - 1
-        );
-
-    const latestY =
-        yForValue(
-            latestPoint.value
-        );
-
-    container.innerHTML = `
-        <svg
-            class="telemetry-svg-chart"
-            viewBox="0 0 ${width} ${height}"
-            preserveAspectRatio="none"
-            role="img"
-            aria-label="${escapeHtml(metricKey)} telemetry history"
-        >
-            <line
-                class="chart-grid-line"
-                x1="${padding.left}"
-                y1="${padding.top}"
-                x2="${padding.left + plotWidth}"
-                y2="${padding.top}"
-            ></line>
-
-            <line
-                class="chart-grid-line"
-                x1="${padding.left}"
-                y1="${padding.top + plotHeight / 2}"
-                x2="${padding.left + plotWidth}"
-                y2="${padding.top + plotHeight / 2}"
-            ></line>
-
-            <line
-                class="chart-grid-line"
-                x1="${padding.left}"
-                y1="${padding.top + plotHeight}"
-                x2="${padding.left + plotWidth}"
-                y2="${padding.top + plotHeight}"
-            ></line>
-
-            <polygon
-                class="chart-area"
-                points="${area}"
-            ></polygon>
-
-            <polyline
-                class="chart-line"
-                points="${polyline}"
-            ></polyline>
-
-            <circle
-                class="chart-latest-point"
-                cx="${latestX.toFixed(1)}"
-                cy="${latestY.toFixed(1)}"
-                r="2.8"
-            ></circle>
-
-            <text
-                class="chart-axis-label chart-y-max"
-                x="2"
-                y="${padding.top + 4}"
-            >
-                ${escapeHtml(yMaxLabel)}
-            </text>
-
-            <text
-                class="chart-axis-label chart-y-min"
-                x="2"
-                y="${padding.top + plotHeight + 3}"
-            >
-                ${escapeHtml(yMinLabel)}
-            </text>
-
-            <text
-                class="chart-axis-label chart-x-first"
-                x="${padding.left}"
-                y="${height - 4}"
-            >
-                ${escapeHtml(firstTime)}
-            </text>
-
-            <text
-                class="chart-axis-label chart-x-last"
-                x="${padding.left + plotWidth}"
-                y="${height - 4}"
-                text-anchor="end"
-            >
-                ${escapeHtml(lastTime)}
-            </text>
-        </svg>
-    `;
-}
-
-
-function formatChartTime(timestamp) {
-
-    const date =
-        new Date(
-            timestamp
-        );
-
-    if (
-        Number.isNaN(
-            date.getTime()
-        )
-    ) {
-        return "--";
-    }
-
-    return date.toLocaleTimeString(
-        [],
-        {
-            hour:
-                "2-digit",
-
-            minute:
-                "2-digit"
-        }
-    );
-}
-
-
-function startTelemetryHistoryRefresh() {
-
-    if (
-        telemetryHistoryTimer
-        != null
-    ) {
-
-        clearInterval(
-            telemetryHistoryTimer
-        );
-
-        telemetryHistoryTimer =
-            null;
-    }
-
-    if (
-        telemetryHistoryPaused
-    ) {
-
-        updateTelemetryRefreshUI();
-
-        return;
-    }
-
-    telemetryHistoryTimer =
-        setInterval(
-            () => {
-
-                if (
-                    telemetryHistoryPaused
-                ) {
-
-                    return;
-                }
-
-                if (
-                    selectedHistoryAssetId
-                    != null
-                ) {
-
-                    loadTelemetryHistory();
-                }
-            },
-            TELEMETRY_HISTORY_REFRESH_MS
-        );
-
-    updateTelemetryRefreshUI();
-}
-
-
 /* =========================================================
    PHASE 6.3 SENSOR HEALTH + ALERTS
 ========================================================= */
@@ -6636,6 +3378,10 @@ function renderAlertFeed(alerts) {
                                     `
                                     : ""
                             }
+
+                            <div class="alert-source-row">
+                                LOCAL PROJECT
+                            </div>
 
                         </button>
                     `;
@@ -7003,11 +3749,6 @@ function connectLocationSocket() {
                 );
 
 
-                populateHistoryAssetSelect(
-                    infrastructureData
-                );
-
-
                 applyFilters();
 
             }
@@ -7149,21 +3890,12 @@ async function refreshDashboard() {
             loadRisk(),
             loadAnalytics(),
             loadEarthquakes(),
-            loadTestEventStatus(),
-            loadTelemetryAlerts(),
-            loadPersistedTelemetryAlerts()
+            loadTestEventStatus()
         ]
     );
 
 
     refreshMarkerTelemetry();
-
-    if (
-        selectedHistoryAssetId != null
-    ) {
-
-        await loadTelemetryHistory();
-    }
 }
 
 
@@ -7388,72 +4120,6 @@ window.addEventListener(
             );
 
 
-        const historyAsset =
-            document.getElementById(
-                "historyAsset"
-            );
-
-
-        const historyRange =
-            document.getElementById(
-                "historyRange"
-            );
-
-
-        const refreshHistoryButton =
-            document.getElementById(
-                "refreshHistory"
-            );
-
-
-        const toggleHistoryRefreshButton =
-            document.getElementById(
-                "toggleHistoryRefresh"
-            );
-
-
-        const telemetryAlertSeverity =
-            document.getElementById(
-                "telemetryAlertSeverity"
-            );
-
-
-        const persistedAlertStatusFilter =
-            document.getElementById(
-                "persistedAlertStatusFilter"
-            );
-
-
-        const persistedAlertSeverityFilter =
-            document.getElementById(
-                "persistedAlertSeverityFilter"
-            );
-
-
-        const refreshPersistedAlerts =
-            document.getElementById(
-                "refreshPersistedAlerts"
-            );
-
-
-        const persistedAlertFeed =
-            document.getElementById(
-                "persistedAlertFeed"
-            );
-
-
-        const closeAlertHistoryButton =
-            document.getElementById(
-                "closeAlertHistory"
-            );
-
-
-        const alertHistoryModal =
-            document.getElementById(
-                "alertHistoryModal"
-            );
-
-
         if (searchBox) {
 
             searchBox.addEventListener(
@@ -7499,177 +4165,11 @@ window.addEventListener(
         }
 
 
-        if (historyAsset) {
-
-            historyAsset.addEventListener(
-                "change",
-                () => {
-
-                    const value =
-                        Number(
-                            historyAsset.value
-                        );
-
-                    if (
-                        Number.isFinite(value)
-                        &&
-                        value > 0
-                    ) {
-
-                        selectedHistoryAssetId =
-                            value;
-
-                        loadTelemetryHistory();
-                    }
-
-                    else {
-
-                        selectedHistoryAssetId =
-                            null;
-
-                        showTelemetryHistoryEmpty(
-                            "Select an infrastructure asset to load persisted telemetry history."
-                        );
-                    }
-                }
-            );
-        }
-
-
-        if (historyRange) {
-
-            historyRange.addEventListener(
-                "change",
-                () => {
-
-                    if (
-                        selectedHistoryAssetId
-                        != null
-                    ) {
-
-                        loadTelemetryHistory();
-                    }
-                }
-            );
-        }
-
-
-        if (refreshHistoryButton) {
-
-            refreshHistoryButton.addEventListener(
-                "click",
-                loadTelemetryHistory
-            );
-        }
-
-
-        if (toggleHistoryRefreshButton) {
-
-            toggleHistoryRefreshButton.addEventListener(
-                "click",
-                toggleTelemetryHistoryRefresh
-            );
-        }
-
-
-        if (telemetryAlertSeverity) {
-
-            telemetryAlertSeverity.addEventListener(
-                "change",
-                renderTelemetryAlerts
-            );
-        }
-
-
-        if (persistedAlertStatusFilter) {
-
-            persistedAlertStatusFilter.addEventListener(
-                "change",
-                renderPersistedAlerts
-            );
-        }
-
-
-        if (persistedAlertSeverityFilter) {
-
-            persistedAlertSeverityFilter.addEventListener(
-                "change",
-                renderPersistedAlerts
-            );
-        }
-
-
-        if (refreshPersistedAlerts) {
-
-            refreshPersistedAlerts.addEventListener(
-                "click",
-                loadPersistedTelemetryAlerts
-            );
-        }
-
-
-        if (persistedAlertFeed) {
-
-            persistedAlertFeed.addEventListener(
-                "click",
-                handlePersistedAlertFeedClick
-            );
-        }
-
-
-        if (closeAlertHistoryButton) {
-
-            closeAlertHistoryButton.addEventListener(
-                "click",
-                closeAlertHistory
-            );
-        }
-
-
-        if (alertHistoryModal) {
-
-            alertHistoryModal.addEventListener(
-                "click",
-                event => {
-
-                    if (
-                        event.target.dataset
-                        &&
-                        event.target.dataset.closeAlertHistory
-                        === "true"
-                    ) {
-
-                        closeAlertHistory();
-                    }
-                }
-            );
-        }
-
-
-        document.addEventListener(
-            "keydown",
-            event => {
-
-                if (
-                    event.key === "Escape"
-                ) {
-
-                    closeAlertHistory();
-                }
-            }
-        );
-
-
         /*
             Initial REST load
         */
 
         await refreshDashboard();
-
-
-        updateTelemetryRefreshUI();
-
-        startTelemetryHistoryRefresh();
 
 
         /*
@@ -7679,8 +4179,6 @@ window.addEventListener(
         connectSensorSocket();
 
         connectAlertSocket();
-
-        connectTelemetryAlertSocket();
 
         connectLocationSocket();
 
@@ -7705,412 +4203,460 @@ window.addEventListener(
         console.log(
             "USGS earthquake integration: READ ONLY"
         );
-
-
-        console.log(
-            "Telemetry history: PostgreSQL persisted, 60-second refresh"
-        );
-
-
-        console.log(
-            "Phase 6.5 telemetry alerting: threshold + trend detection"
-        );
     }
 );
 
-
 /* =========================================================
-   PHASE 6.6 NEON DASHBOARD SHELL
-   Visual-only helpers. Existing monitoring logic remains intact.
+   PHASE 6.8 — SRE INTELLIGENCE + INCIDENT OPERATIONS
+   Additive module: does not recreate the map or modify the
+   existing telemetry, sensor-health, alert-lifecycle streams.
 ========================================================= */
 
-function updateDashboardClock() {
+const phase68State = {
+    intelligence: null,
+    slaStatus: null,
+    policy: null,
+    incidents: [],
+    selectedIncidentId: null,
+    refreshTimer: null
+};
 
-    const now =
-        new Date();
-
-    const dateElement =
-        document.getElementById(
-            "dashboardDate"
-        );
-
-    const clockElement =
-        document.getElementById(
-            "dashboardClock"
-        );
-
-    if (dateElement) {
-
-        dateElement.textContent =
-            now.toLocaleDateString(
-                undefined,
-                {
-                    weekday: "short",
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric"
-                }
-            );
+function phase68El(id) { return document.getElementById(id); }
+function phase68Text(id, value) { const el = phase68El(id); if (el) el.textContent = value; }
+function phase68Number(value, fallback = 0) { const n = Number(value); return Number.isFinite(n) ? n : fallback; }
+function phase68Date(value) {
+    if (!value) return "--";
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString();
+}
+function phase68Duration(minutes) {
+    const n = Number(minutes);
+    if (!Number.isFinite(n)) return "--";
+    if (n < 60) return `${n.toFixed(2)} min`;
+    return `${(n / 60).toFixed(2)} hr`;
+}
+function phase68Escape(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;").replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+async function phase68Fetch(path, options = {}) {
+    const response = await fetch(`${API_URL}${path}`, {
+        ...options,
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+    });
+    let body = null;
+    try { body = await response.json(); } catch (_) { body = null; }
+    if (!response.ok) {
+        const detail = body?.detail || body?.message || `HTTP ${response.status}`;
+        throw new Error(detail);
     }
+    return body;
+}
 
-    if (clockElement) {
+function renderPhase68Intelligence(data) {
+    const metrics = data?.incident_metrics || {};
+    const sla = data?.sla || {};
+    const ops = data?.operations || {};
+    const priorities = ops?.open_by_priority || {};
 
-        clockElement.textContent =
-            now.toLocaleTimeString(
-                undefined,
-                {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit"
-                }
-            );
+    phase68Text("sreMtta", phase68Duration(metrics.mtta_minutes));
+    phase68Text("sreMttr", phase68Duration(metrics.mttr_minutes));
+    phase68Text("sreSlaBreaches", phase68Number(sla.incidents_with_active_sla_breach));
+    phase68Text("sreEscalated", phase68Number(ops.escalated_open_incidents));
+    phase68Text("sreUnassigned", phase68Number(ops.unassigned_open_incidents));
+    phase68Text("priorityP1", phase68Number(priorities.P1));
+    phase68Text("priorityP2", phase68Number(priorities.P2));
+    phase68Text("priorityP3", phase68Number(priorities.P3));
+    phase68Text("priorityP4", phase68Number(priorities.P4));
+    phase68Text("slaAckBreaches", phase68Number(sla.active_acknowledgement_breaches));
+    phase68Text("slaResolutionBreaches", phase68Number(sla.active_resolution_breaches));
+
+    const evaluation = sla.last_evaluation || {};
+    phase68Text("slaEvaluatedCount", phase68Number(evaluation.evaluated ?? evaluation.checked ?? evaluation.incidents_checked));
+    phase68Text("slaLastEvaluation", data?.generated_at ? new Date(data.generated_at).toLocaleTimeString() : "--");
+}
+
+function renderPhase68Policy(data) {
+    const target = phase68El("slaPolicyList");
+    if (!target) return;
+    const targets = data?.sla_targets || {};
+    const priorities = data?.priorities || ["P1", "P2", "P3", "P4"];
+    target.innerHTML = priorities.map(priority => {
+        const item = targets[priority] || {};
+        const ack = item.acknowledge_minutes ?? item.ack_minutes ?? "--";
+        const resolve = item.resolve_minutes ?? item.resolution_minutes ?? "--";
+        return `<div class="sla-policy-row"><span class="priority-badge ${priority.toLowerCase()}">${phase68Escape(priority)}</span><span>ACK <strong>${phase68Escape(ack)}m</strong></span><span>RES <strong>${phase68Escape(resolve)}m</strong></span></div>`;
+    }).join("");
+}
+
+function incidentHasBreach(incident) {
+    return Boolean(incident?.acknowledgement_sla_breached || incident?.resolution_sla_breached);
+}
+function incidentSlaLabel(incident) {
+    const ack = Boolean(incident?.acknowledgement_sla_breached);
+    const res = Boolean(incident?.resolution_sla_breached);
+    if (ack && res) return "ACK + RES BREACH";
+    if (ack) return "ACK BREACH";
+    if (res) return "RES BREACH";
+    return "WITHIN SLA";
+}
+function filteredPhase68Incidents() {
+    const search = (phase68El("incidentSearch")?.value || "").trim().toLowerCase();
+    const status = phase68El("incidentStatusFilter")?.value || "all";
+    const priority = phase68El("incidentPriorityFilter")?.value || "all";
+    const sla = phase68El("incidentSlaFilter")?.value || "all";
+    return phase68State.incidents.filter(item => {
+        const haystack = [item.id, item.incident_key, item.title, item.asset_name, item.owner, item.assigned_team].join(" ").toLowerCase();
+        if (search && !haystack.includes(search)) return false;
+        if (status !== "all" && String(item.status || "").toLowerCase() !== status) return false;
+        if (priority !== "all" && String(item.priority || "").toUpperCase() !== priority) return false;
+        if (sla === "breached" && !incidentHasBreach(item)) return false;
+        if (sla === "healthy" && incidentHasBreach(item)) return false;
+        return true;
+    });
+}
+
+function renderPhase68Incidents() {
+    const target = phase68El("incidentOperationsList");
+    if (!target) return;
+    const incidents = filteredPhase68Incidents();
+    phase68Text("incidentQueueCount", `${incidents.length} incidents`);
+    phase68Text("sidebarIncidentCount", phase68State.incidents.filter(i => i.status !== "resolved").length);
+    if (!incidents.length) {
+        target.innerHTML = '<div class="empty-state">No incidents match the current filters.</div>';
+        return;
+    }
+    target.innerHTML = incidents.map(item => {
+        const id = Number(item.id);
+        const priority = String(item.priority || "UNSET").toUpperCase();
+        const status = String(item.status || "unknown").toLowerCase();
+        const breached = incidentHasBreach(item);
+        const title = item.title || item.asset_name || item.incident_key || `Incident ${id}`;
+        return `<div class="incident-operation-row" data-incident-id="${id}">
+            <button class="incident-title-button" type="button" data-phase68-action="view" data-incident-id="${id}"><strong>#${id} · ${phase68Escape(title)}</strong><small>${phase68Escape(item.severity || "unknown")} severity</small></button>
+            <span><span class="priority-badge ${priority.toLowerCase()}">${phase68Escape(priority)}</span></span>
+            <span><span class="incident-status-badge ${status}">${phase68Escape(status.toUpperCase())}</span></span>
+            <span class="incident-owner">${phase68Escape(item.owner || item.assigned_team || "Unassigned")}</span>
+            <span><span class="sla-badge ${breached ? "breached" : "healthy"}">${phase68Escape(incidentSlaLabel(item))}</span></span>
+            <span class="incident-row-actions">
+                <button type="button" data-phase68-action="view" data-incident-id="${id}">View</button>
+                <button type="button" data-phase68-action="priority" data-incident-id="${id}">Priority</button>
+                <button type="button" data-phase68-action="assign" data-incident-id="${id}">Assign</button>
+                <button type="button" data-phase68-action="more" data-incident-id="${id}">Ops</button>
+            </span>
+        </div>`;
+    }).join("");
+}
+
+async function loadPhase68Intelligence() {
+    const data = await phase68Fetch("/sre/intelligence?hours=168");
+    phase68State.intelligence = data;
+    renderPhase68Intelligence(data);
+}
+async function loadPhase68Policy() {
+    const data = await phase68Fetch("/sre/priority-policy");
+    phase68State.policy = data;
+    renderPhase68Policy(data);
+}
+async function loadPhase68Incidents() {
+    const [slaData, incidentData] = await Promise.all([
+        phase68Fetch("/sre/sla-status?limit=250"),
+        phase68Fetch("/incidents?limit=250")
+    ]);
+    phase68State.slaStatus = slaData;
+    const full = Array.isArray(incidentData?.incidents) ? incidentData.incidents : [];
+    const slaById = new Map((slaData?.incidents || []).map(i => [Number(i.id), i]));
+    phase68State.incidents = full.map(i => ({ ...i, ...(slaById.get(Number(i.id)) || {}) }));
+    renderPhase68Incidents();
+}
+
+async function refreshPhase68() {
+    const status = phase68El("sreRefreshStatus");
+    if (status) { status.textContent = "REFRESHING"; status.classList.add("refreshing"); }
+    const results = await Promise.allSettled([
+        loadPhase68Intelligence(), loadPhase68Incidents(), loadPhase68Policy()
+    ]);
+    const failed = results.filter(r => r.status === "rejected");
+    if (status) {
+        status.textContent = failed.length ? "DEGRADED" : "LIVE";
+        status.classList.toggle("error", Boolean(failed.length));
+        status.classList.remove("refreshing");
+    }
+    if (failed.length) console.error("Phase 6.8 refresh errors:", failed.map(f => f.reason));
+}
+
+function openIncidentDrawer() {
+    phase68El("incidentDrawer")?.classList.add("open");
+    phase68El("incidentDrawer")?.setAttribute("aria-hidden", "false");
+    phase68El("incidentDrawerBackdrop")?.classList.add("open");
+    phase68El("incidentDrawerBackdrop")?.setAttribute("aria-hidden", "false");
+}
+function closeIncidentDrawer() {
+    phase68El("incidentDrawer")?.classList.remove("open");
+    phase68El("incidentDrawer")?.setAttribute("aria-hidden", "true");
+    phase68El("incidentDrawerBackdrop")?.classList.remove("open");
+    phase68El("incidentDrawerBackdrop")?.setAttribute("aria-hidden", "true");
+}
+async function showIncidentDetail(id) {
+    phase68State.selectedIncidentId = Number(id);
+    const body = phase68El("incidentDrawerBody");
+    if (body) body.innerHTML = '<div class="empty-state">Loading incident detail...</div>';
+    openIncidentDrawer();
+    try {
+        const [detailData, slaData, eventData] = await Promise.all([
+            phase68Fetch(`/incidents/${id}`),
+            phase68Fetch(`/incidents/${id}/sla`),
+            phase68Fetch(`/incidents/${id}/events`)
+        ]);
+        const incident = { ...(detailData?.incident || {}), ...(slaData?.incident || {}) };
+        const sla = slaData?.sla || {};
+        const history = Array.isArray(eventData?.history) ? eventData.history : [];
+        phase68Text("incidentDrawerTitle", `Incident #${id}`);
+        if (body) body.innerHTML = `
+            <div class="incident-detail-title"><strong>${phase68Escape(incident.title || incident.incident_key || `Incident ${id}`)}</strong><span class="priority-badge ${String(incident.priority || "unset").toLowerCase()}">${phase68Escape(incident.priority || "UNSET")}</span></div>
+            <div class="incident-detail-grid">
+                <div><span>Severity</span><strong>${phase68Escape(incident.severity || "--")}</strong></div>
+                <div><span>Status</span><strong>${phase68Escape(incident.status || "--")}</strong></div>
+                <div><span>Owner</span><strong>${phase68Escape(incident.owner || "Unassigned")}</strong></div>
+                <div><span>Team</span><strong>${phase68Escape(incident.assigned_team || "--")}</strong></div>
+                <div><span>Escalation</span><strong>${incident.escalated ? `Level ${phase68Escape(incident.escalation_level || 1)}` : "No"}</strong></div>
+                <div><span>Created</span><strong>${phase68Escape(phase68Date(incident.created_at))}</strong></div>
+            </div>
+            <div class="incident-sla-detail">
+                <h3>SLA</h3>
+                <div class="incident-detail-grid">
+                    <div><span>ACK Due</span><strong>${phase68Escape(phase68Date(incident.acknowledgement_due_at || sla.acknowledgement_due_at))}</strong></div>
+                    <div><span>ACK Status</span><strong class="${incident.acknowledgement_sla_breached ? "danger-text" : "success-text"}">${incident.acknowledgement_sla_breached ? "BREACHED" : "WITHIN SLA"}</strong></div>
+                    <div><span>Resolution Due</span><strong>${phase68Escape(phase68Date(incident.resolution_due_at || sla.resolution_due_at))}</strong></div>
+                    <div><span>Resolution Status</span><strong class="${incident.resolution_sla_breached ? "danger-text" : "success-text"}">${incident.resolution_sla_breached ? "BREACHED" : "WITHIN SLA"}</strong></div>
+                </div>
+            </div>
+            <div class="incident-drawer-actions">
+                <button data-phase68-action="acknowledge" data-incident-id="${id}">Acknowledge</button>
+                <button data-phase68-action="assign" data-incident-id="${id}">Assign</button>
+                <button data-phase68-action="priority" data-incident-id="${id}">Priority</button>
+                <button data-phase68-action="escalate" data-incident-id="${id}">Escalate</button>
+                <button data-phase68-action="mitigate" data-incident-id="${id}">Mitigate</button>
+                <button data-phase68-action="resolve" data-incident-id="${id}">Resolve</button>
+                <button data-phase68-action="reopen" data-incident-id="${id}">Reopen</button>
+            </div>
+            <div class="incident-history"><h3>Incident Timeline</h3>${history.length ? history.map(event => `<div class="incident-history-event"><span class="history-dot"></span><div><strong>${phase68Escape(event.action || "EVENT")}</strong><small>${phase68Escape(phase68Date(event.changed_at))} · ${phase68Escape(event.changed_by || "SYSTEM")}</small><p>${phase68Escape(event.note || "")}</p></div></div>`).join("") : '<div class="empty-state">No incident history events.</div>'}</div>`;
+    } catch (error) {
+        if (body) body.innerHTML = `<div class="empty-state danger-text">${phase68Escape(error.message)}</div>`;
     }
 }
 
-
-function updateDashboardMirrors() {
-
-    const healthSource =
-        document.getElementById(
-            "averageSensorHealth"
-        );
-
-    const healthRing =
-        document.getElementById(
-            "healthRing"
-        );
-
-    const healthRingValue =
-        document.getElementById(
-            "healthRingValue"
-        );
-
-    if (
-        healthSource
-        &&
-        healthRing
-        &&
-        healthRingValue
-    ) {
-
-        const match =
-            String(
-                healthSource.textContent
-                || "0"
-            ).match(
-                /-?\d+(?:\.\d+)?/
-            );
-
-        const health =
-            Math.max(
-                0,
-                Math.min(
-                    100,
-                    match
-                        ? Number(match[0])
-                        : 0
-                )
-            );
-
-        healthRingValue.textContent =
-            `${Math.round(health)}%`;
-
-        healthRing.style.setProperty(
-            "--health-angle",
-            `${health * 3.6}deg`
-        );
+function openIncidentAction(id, action) {
+    if (action === "view") return showIncidentDetail(id);
+    if (action === "more") return showIncidentDetail(id);
+    const modal = phase68El("incidentActionModal");
+    const valueWrap = phase68El("incidentActionValueWrap");
+    const value = phase68El("incidentActionValue");
+    const label = phase68El("incidentActionValueLabel");
+    phase68El("incidentActionId").value = id;
+    phase68El("incidentActionType").value = action;
+    phase68El("incidentActionNote").value = "";
+    phase68Text("incidentActionMessage", "");
+    phase68Text("incidentActionTitle", `${action.charAt(0).toUpperCase() + action.slice(1)} Incident #${id}`);
+    valueWrap?.classList.add("hidden");
+    value?.removeAttribute("required");
+    if (action === "priority") {
+        valueWrap?.classList.remove("hidden"); label.textContent = "Priority (P1-P4)"; value.value = "P2"; value.placeholder = "P1, P2, P3 or P4"; value.required = true;
+    } else if (action === "assign") {
+        valueWrap?.classList.remove("hidden"); label.textContent = "Owner"; value.value = ""; value.placeholder = "Operator or team owner"; value.required = true;
     }
-
-
-    const alertSource =
-        document.getElementById(
-            "activeAlertsCount"
-        );
-
-    const sidebarAlertCount =
-        document.getElementById(
-            "sidebarAlertCount"
-        );
-
-    if (
-        alertSource
-        &&
-        sidebarAlertCount
-    ) {
-
-        sidebarAlertCount.textContent =
-            String(
-                alertSource.textContent
-                || "0"
-            );
-    }
-
-
-    const riskSource =
-        document.getElementById(
-            "highRisk"
-        );
-
-    const riskTarget =
-        document.getElementById(
-            "opsRiskValue"
-        );
-
-    if (
-        riskSource
-        &&
-        riskTarget
-    ) {
-
-        riskTarget.textContent =
-            String(
-                riskSource.textContent
-                || "0"
-            );
-    }
-
-
-    const alertAssetSource =
-        document.getElementById(
-            "telemetryAlertAssets"
-        );
-
-    const alertAssetTarget =
-        document.getElementById(
-            "opsAlertAssetValue"
-        );
-
-    if (
-        alertAssetSource
-        &&
-        alertAssetTarget
-    ) {
-
-        alertAssetTarget.textContent =
-            String(
-                alertAssetSource.textContent
-                || "0"
-            );
-    }
-
-
-    const trendSource =
-        document.getElementById(
-            "telemetryTrendAlertCount"
-        );
-
-    const trendTarget =
-        document.getElementById(
-            "opsTrendValue"
-        );
-
-    if (
-        trendSource
-        &&
-        trendTarget
-    ) {
-
-        trendTarget.textContent =
-            String(
-                trendSource.textContent
-                || "0"
-            );
-    }
+    modal?.classList.add("open"); modal?.setAttribute("aria-hidden", "false");
 }
-
-
-function activateDashboardNavigation() {
-
-    const main =
-        document.getElementById(
-            "dashboardMain"
-        );
-
-    const buttons =
-        [
-            ...document.querySelectorAll(
-                "[data-scroll-target]"
-            )
-        ];
-
-    buttons.forEach(
-        button => {
-
-            button.addEventListener(
-                "click",
-                () => {
-
-                    const targetId =
-                        button.dataset.scrollTarget;
-
-                    const target =
-                        document.getElementById(
-                            targetId
-                        );
-
-                    if (!target) {
-                        return;
-                    }
-
-                    target.scrollIntoView(
-                        {
-                            behavior: "smooth",
-                            block: "start"
-                        }
-                    );
-
-                    document
-                        .querySelectorAll(
-                            ".nav-item"
-                        )
-                        .forEach(
-                            item =>
-                                item.classList.remove(
-                                    "active"
-                                )
-                        );
-
-                    if (
-                        button.classList.contains(
-                            "nav-item"
-                        )
-                    ) {
-
-                        button.classList.add(
-                            "active"
-                        );
-                    }
-                }
-            );
+function closeIncidentActionModal() {
+    phase68El("incidentActionModal")?.classList.remove("open");
+    phase68El("incidentActionModal")?.setAttribute("aria-hidden", "true");
+}
+async function submitIncidentAction(event) {
+    event.preventDefault();
+    const id = Number(phase68El("incidentActionId")?.value);
+    const action = phase68El("incidentActionType")?.value;
+    const operator = (phase68El("incidentActionOperator")?.value || "dashboard-operator").trim();
+    const note = (phase68El("incidentActionNote")?.value || "").trim() || null;
+    const value = (phase68El("incidentActionValue")?.value || "").trim();
+    const message = phase68El("incidentActionMessage");
+    if (message) message.textContent = "Applying operation...";
+    try {
+        let path = `/incidents/${id}/${action}`;
+        let payload = { changed_by: operator, note };
+        if (action === "priority") {
+            const priority = value.toUpperCase();
+            if (!/^P[1-4]$/.test(priority)) throw new Error("Priority must be P1, P2, P3 or P4.");
+            payload = { priority, changed_by: operator, note };
+        } else if (action === "assign") {
+            if (!value) throw new Error("Owner is required.");
+            payload = { owner: value, changed_by: operator, note };
         }
-    );
-
-
-    if (
-        main
-        &&
-        "IntersectionObserver"
-        in window
-    ) {
-
-        const navButtons =
-            [
-                ...document.querySelectorAll(
-                    ".nav-item[data-scroll-target]"
-                )
-            ];
-
-        const observer =
-            new IntersectionObserver(
-                entries => {
-
-                    const visible =
-                        entries
-                            .filter(
-                                entry =>
-                                    entry.isIntersecting
-                            )
-                            .sort(
-                                (
-                                    first,
-                                    second
-                                ) =>
-                                    second.intersectionRatio
-                                    -
-                                    first.intersectionRatio
-                            )[0];
-
-                    if (!visible) {
-                        return;
-                    }
-
-                    navButtons.forEach(
-                        button => {
-
-                            button.classList.toggle(
-                                "active",
-                                button.dataset.scrollTarget
-                                ===
-                                visible.target.id
-                            );
-                        }
-                    );
-                },
-                {
-                    root: main,
-                    threshold: [
-                        0.16,
-                        0.35,
-                        0.55
-                    ]
-                }
-            );
-
-        navButtons.forEach(
-            button => {
-
-                const section =
-                    document.getElementById(
-                        button.dataset.scrollTarget
-                    );
-
-                if (section) {
-                    observer.observe(section);
-                }
-            }
-        );
+        await phase68Fetch(path, { method: "POST", body: JSON.stringify(payload) });
+        closeIncidentActionModal();
+        await refreshPhase68();
+        if (phase68State.selectedIncidentId === id && phase68El("incidentDrawer")?.classList.contains("open")) await showIncidentDetail(id);
+    } catch (error) {
+        if (message) message.textContent = error.message;
     }
 }
 
+async function evaluatePhase68Sla() {
+    const button = phase68El("evaluateSlaButton");
+    if (button) button.disabled = true;
+    try { await phase68Fetch("/sre/sla/evaluate", { method: "POST", body: "{}" }); await refreshPhase68(); }
+    catch (error) { console.error("SLA evaluation failed:", error); }
+    finally { if (button) button.disabled = false; }
+}
 
-function initialiseNeonDashboardShell() {
+function initPhase68() {
+    if (!phase68El("sreSection")) return;
+    ["incidentSearch", "incidentStatusFilter", "incidentPriorityFilter", "incidentSlaFilter"].forEach(id => {
+        phase68El(id)?.addEventListener(id === "incidentSearch" ? "input" : "change", renderPhase68Incidents);
+    });
+    phase68El("refreshSreButton")?.addEventListener("click", refreshPhase68);
+    phase68El("evaluateSlaButton")?.addEventListener("click", evaluatePhase68Sla);
+    phase68El("closeIncidentDrawer")?.addEventListener("click", closeIncidentDrawer);
+    phase68El("incidentDrawerBackdrop")?.addEventListener("click", closeIncidentDrawer);
+    phase68El("closeIncidentActionModal")?.addEventListener("click", closeIncidentActionModal);
+    phase68El("cancelIncidentAction")?.addEventListener("click", closeIncidentActionModal);
+    phase68El("incidentActionModal")?.addEventListener("click", e => { if (e.target?.dataset?.closeIncidentAction === "true") closeIncidentActionModal(); });
+    phase68El("incidentActionForm")?.addEventListener("submit", submitIncidentAction);
+    document.addEventListener("click", event => {
+        const button = event.target.closest("[data-phase68-action]");
+        if (!button) return;
+        const id = Number(button.dataset.incidentId);
+        const action = button.dataset.phase68Action;
+        if (!id || !action) return;
+        openIncidentAction(id, action);
+    });
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape") { closeIncidentDrawer(); closeIncidentActionModal(); }
+    });
+    refreshPhase68();
+    phase68State.refreshTimer = window.setInterval(refreshPhase68, 15000);
+}
 
-    updateDashboardClock();
+document.addEventListener("DOMContentLoaded", initPhase68);
 
-    setInterval(
-        updateDashboardClock,
-        1000
+
+/* =========================================================
+   GEOINFRA SIDEBAR NAVIGATION
+   Uses the existing HTML data-scroll-target attributes.
+   ========================================================= */
+
+function initGeoInfraSidebarNavigation() {
+    const main = document.getElementById("dashboardMain");
+    const sidebar = document.querySelector(".sidebar");
+
+    if (!main || !sidebar) {
+        console.error("[Navigation] dashboardMain/sidebar missing");
+        return;
+    }
+
+    const buttons = Array.from(
+        sidebar.querySelectorAll(".nav-item[data-scroll-target]")
     );
 
-    updateDashboardMirrors();
-
-    setInterval(
-        updateDashboardMirrors,
-        1500
+    console.log(
+        `[Navigation] ${buttons.length} sidebar controls initialized`
     );
 
-    activateDashboardNavigation();
+    function activate(button) {
+        buttons.forEach(btn => btn.classList.remove("active"));
+        button.classList.add("active");
+    }
 
+    function goTo(button) {
+        const targetId = button.dataset.scrollTarget;
+        const target = document.getElementById(targetId);
 
-    setTimeout(
-        () => {
+        if (!target) {
+            console.error(
+                `[Navigation] Target #${targetId} not found`
+            );
+            return;
+        }
 
-            if (
-                typeof map !== "undefined"
-                &&
-                map
-            ) {
+        /*
+         * Calculate target position relative to dashboardMain,
+         * NOT relative to the browser window.
+         */
+        const mainRect = main.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
 
-                map.invalidateSize();
+        const destination =
+            main.scrollTop +
+            targetRect.top -
+            mainRect.top -
+            12;
+
+        console.log(
+            `[Navigation] ${button.innerText.trim()} -> #${targetId}`,
+            {
+                current: main.scrollTop,
+                destination
             }
+        );
+
+        activate(button);
+
+        main.scrollTo({
+            top: Math.max(0, destination),
+            behavior: "smooth"
+        });
+
+        /*
+         * Leaflet resize protection.
+         */
+        if (targetId === "mapSection") {
+            setTimeout(() => {
+                try {
+                    if (
+                        typeof map !== "undefined" &&
+                        map &&
+                        typeof map.invalidateSize === "function"
+                    ) {
+                        map.invalidateSize();
+                    }
+                } catch (_) {}
+            }, 400);
+        }
+    }
+
+    /*
+     * Capture-phase delegation.
+     *
+     * This fires before another dashboard handler can swallow
+     * the click.
+     */
+    sidebar.addEventListener(
+        "click",
+        event => {
+            const button = event.target.closest(
+                ".nav-item[data-scroll-target]"
+            );
+
+            if (!button || !sidebar.contains(button)) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            goTo(button);
         },
-        600
+        true
     );
 }
 
-
-if (
-    document.readyState
-    === "loading"
-) {
-
+if (document.readyState === "loading") {
     document.addEventListener(
         "DOMContentLoaded",
-        initialiseNeonDashboardShell
+        initGeoInfraSidebarNavigation
     );
+} else {
+    initGeoInfraSidebarNavigation();
 }
 
-else {
-
-    initialiseNeonDashboardShell();
-}

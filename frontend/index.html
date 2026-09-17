@@ -88,6 +88,12 @@
                 <span>Alert History</span>
             </button>
 
+            <button class="nav-item" data-scroll-target="sreSection">
+                <span class="nav-icon">◇</span>
+                <span>SRE Operations</span>
+                <span class="nav-count" id="sidebarIncidentCount">0</span>
+            </button>
+
             <button class="nav-item" data-scroll-target="analyticsSection">
                 <span class="nav-icon">▥</span>
                 <span>Analytics</span>
@@ -114,7 +120,7 @@
             </div>
 
             <div class="version-label">
-                v6.7.0
+                v6.8.0
             </div>
         </div>
 
@@ -878,6 +884,99 @@
 
 
         <!-- =================================================
+             PHASE 6.8 — SRE INTELLIGENCE + INCIDENT OPS
+        ================================================== -->
+        <section class="dashboard-section phase68-section" id="sreSection">
+
+            <div class="phase68-heading">
+                <div>
+                    <p class="eyebrow">PHASE 6.8 · INCIDENT OPERATIONS</p>
+                    <h2>SRE Intelligence &amp; Incident Operations</h2>
+                    <p>Priority, SLA, ownership, escalation and lifecycle intelligence for project-local incidents.</p>
+                </div>
+                <div class="phase68-heading-actions">
+                    <span id="sreRefreshStatus" class="phase68-live-pill">LIVE</span>
+                    <button id="evaluateSlaButton" class="neon-button subtle" type="button">Evaluate SLA</button>
+                    <button id="refreshSreButton" class="neon-button" type="button">Refresh</button>
+                </div>
+            </div>
+
+            <div class="phase68-kpi-grid">
+                <article class="glass-card phase68-kpi-card">
+                    <span>MTTA</span><strong id="sreMtta">--</strong><small>Mean time to acknowledge</small>
+                </article>
+                <article class="glass-card phase68-kpi-card">
+                    <span>MTTR</span><strong id="sreMttr">--</strong><small>Mean time to resolve</small>
+                </article>
+                <article class="glass-card phase68-kpi-card breach">
+                    <span>Active SLA Breaches</span><strong id="sreSlaBreaches">0</strong><small>Incidents requiring attention</small>
+                </article>
+                <article class="glass-card phase68-kpi-card">
+                    <span>Escalated</span><strong id="sreEscalated">0</strong><small>Open escalated incidents</small>
+                </article>
+                <article class="glass-card phase68-kpi-card">
+                    <span>Unassigned</span><strong id="sreUnassigned">0</strong><small>Open incidents without owner</small>
+                </article>
+            </div>
+
+            <div class="phase68-priority-grid" aria-label="Open incidents by priority">
+                <article class="priority-summary-card p1"><span>P1</span><strong id="priorityP1">0</strong><small>Critical priority</small></article>
+                <article class="priority-summary-card p2"><span>P2</span><strong id="priorityP2">0</strong><small>High priority</small></article>
+                <article class="priority-summary-card p3"><span>P3</span><strong id="priorityP3">0</strong><small>Standard priority</small></article>
+                <article class="priority-summary-card p4"><span>P4</span><strong id="priorityP4">0</strong><small>Low priority</small></article>
+            </div>
+
+            <div class="phase68-ops-grid">
+                <article class="glass-card incident-operations-card">
+                    <div class="card-heading">
+                        <div><span class="card-kicker">OPERATIONS</span><h2>Incident Queue</h2></div>
+                        <span id="incidentQueueCount" class="phase68-count">0 incidents</span>
+                    </div>
+
+                    <div class="incident-toolbar">
+                        <input id="incidentSearch" type="search" placeholder="Search ID, title, asset or owner..." autocomplete="off">
+                        <select id="incidentStatusFilter">
+                            <option value="all">All status</option><option value="open">Open</option>
+                            <option value="investigating">Investigating</option><option value="mitigated">Mitigated</option>
+                            <option value="resolved">Resolved</option>
+                        </select>
+                        <select id="incidentPriorityFilter">
+                            <option value="all">All priorities</option><option value="P1">P1</option>
+                            <option value="P2">P2</option><option value="P3">P3</option><option value="P4">P4</option>
+                        </select>
+                        <select id="incidentSlaFilter">
+                            <option value="all">All SLA</option><option value="breached">SLA breached</option>
+                            <option value="healthy">Within SLA</option>
+                        </select>
+                    </div>
+
+                    <div class="incident-table-wrap">
+                        <div class="incident-table-header">
+                            <span>ID / Incident</span><span>Priority</span><span>Status</span><span>Owner</span><span>SLA</span><span>Actions</span>
+                        </div>
+                        <div id="incidentOperationsList" class="incident-operations-list">
+                            <div class="empty-state">Loading incident operations...</div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="glass-card sla-intelligence-card">
+                    <div class="card-heading">
+                        <div><span class="card-kicker">SLA INTELLIGENCE</span><h2>Service Level Status</h2></div>
+                    </div>
+                    <div class="sla-summary-grid">
+                        <div><span>ACK Breaches</span><strong id="slaAckBreaches">0</strong></div>
+                        <div><span>Resolution Breaches</span><strong id="slaResolutionBreaches">0</strong></div>
+                        <div><span>Evaluated</span><strong id="slaEvaluatedCount">0</strong></div>
+                        <div><span>Last Evaluation</span><strong id="slaLastEvaluation">--</strong></div>
+                    </div>
+                    <div class="sla-policy-title">Priority policy</div>
+                    <div id="slaPolicyList" class="sla-policy-list"><div class="empty-state">Loading SLA policy...</div></div>
+                </article>
+            </div>
+        </section>
+
+        <!-- =================================================
              TEST MODE
         ================================================== -->
         <section class="dashboard-section" id="testSection">
@@ -973,7 +1072,7 @@
 
 
         <footer class="dashboard-footer">
-            GeoInfra · Phase 6.7 · Incident Management + SRE Analytics
+            GeoInfra · Phase 6.8 · SRE Intelligence + Incident Operations
         </footer>
 
     </main>
@@ -1078,6 +1177,37 @@
     </div>
 </div>
 
+
+<!-- =====================================================
+     PHASE 6.8 INCIDENT DETAIL DRAWER
+===================================================== -->
+<div id="incidentDrawerBackdrop" class="incident-drawer-backdrop" aria-hidden="true"></div>
+<aside id="incidentDrawer" class="incident-detail-drawer" aria-hidden="true" aria-labelledby="incidentDrawerTitle">
+    <div class="incident-drawer-header">
+        <div><span class="card-kicker">PHASE 6.8 INCIDENT</span><h2 id="incidentDrawerTitle">Incident Detail</h2></div>
+        <button id="closeIncidentDrawer" class="incident-drawer-close" type="button" aria-label="Close incident detail">×</button>
+    </div>
+    <div id="incidentDrawerBody" class="incident-drawer-body"><div class="empty-state">Select an incident to inspect.</div></div>
+</aside>
+
+<!-- PHASE 6.8 ACTION MODAL -->
+<div id="incidentActionModal" class="phase68-modal" aria-hidden="true">
+    <div class="phase68-modal-backdrop" data-close-incident-action="true"></div>
+    <div class="phase68-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="incidentActionTitle">
+        <div class="incident-drawer-header">
+            <div><span class="card-kicker">INCIDENT OPERATION</span><h2 id="incidentActionTitle">Update Incident</h2></div>
+            <button id="closeIncidentActionModal" class="incident-drawer-close" type="button">×</button>
+        </div>
+        <form id="incidentActionForm" class="phase68-action-form">
+            <input id="incidentActionId" type="hidden"><input id="incidentActionType" type="hidden">
+            <label id="incidentActionValueWrap" class="phase68-field hidden"><span id="incidentActionValueLabel">Value</span><input id="incidentActionValue" type="text"></label>
+            <label class="phase68-field"><span>Operator</span><input id="incidentActionOperator" type="text" value="dashboard-operator" required maxlength="100"></label>
+            <label class="phase68-field"><span>Note</span><textarea id="incidentActionNote" rows="3" maxlength="2000" placeholder="Optional operational note"></textarea></label>
+            <div id="incidentActionMessage" class="phase68-action-message"></div>
+            <div class="phase68-form-actions"><button id="cancelIncidentAction" class="neon-button subtle" type="button">Cancel</button><button class="neon-button" type="submit">Apply</button></div>
+        </form>
+    </div>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
