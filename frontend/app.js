@@ -4660,3 +4660,124 @@ if (document.readyState === "loading") {
     initGeoInfraSidebarNavigation();
 }
 
+
+/* =========================================================
+   PHASE 6.9E — AUTOMATION + RELIABILITY ENGINEERING
+   Read-only frontend integration. Existing phases unchanged.
+========================================================= */
+const phase69State = { refreshTimer: null, loading: false };
+function phase69El(id){ return document.getElementById(id); }
+function phase69Text(id,value){ const el=phase69El(id); if(el) el.textContent=value ?? "--"; }
+function phase69Esc(value){ return String(value ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
+function phase69Num(value,fallback=0){ const n=Number(value); return Number.isFinite(n)?n:fallback; }
+function phase69Pct(value){ const n=Number(value); return Number.isFinite(n)?`${n.toFixed(n%1?1:0)}%`:"--"; }
+function phase69Class(value){ return String(value ?? "unknown").toLowerCase().replaceAll("_","-").replace(/[^a-z0-9-]/g,""); }
+function phase69Array(body, keys=[]){
+    if(Array.isArray(body)) return body;
+    if(!body || typeof body!=="object") return [];
+    for(const key of keys) if(Array.isArray(body[key])) return body[key];
+    if(body.results && typeof body.results==="object") {
+        for(const key of keys) if(Array.isArray(body.results[key])) return body.results[key];
+        if(Array.isArray(body.results.results)) return body.results.results;
+    }
+    return [];
+}
+function phase69Object(body, keys=[]){
+    if(!body || typeof body!=="object" || Array.isArray(body)) return {};
+    for(const key of keys) if(body[key] && typeof body[key]==="object" && !Array.isArray(body[key])) return body[key];
+    if(body.results && typeof body.results==="object" && !Array.isArray(body.results)) return body.results;
+    return body;
+}
+async function phase69Fetch(path){
+    const response=await fetch(`${API_URL}${path}`,{headers:{Accept:"application/json"}});
+    let body=null; try{body=await response.json();}catch(_){body=null;}
+    if(!response.ok) throw new Error(`${path}: ${body?.detail || body?.message || `HTTP ${response.status}`}`);
+    return body;
+}
+function phase69Validate(body,label){
+    if(body && typeof body==="object" && "source" in body && body.source!=="LOCAL_PROJECT") console.warn(`[Phase 6.9E] ${label} unexpected source`,body.source);
+    if(body && typeof body==="object" && body.external===true) console.warn(`[Phase 6.9E] ${label} unexpectedly marked external`);
+}
+function phase69RenderRunbooks(body){
+    const all=phase69Array(body,["runbooks","items","results"]);
+    const enabled=all.filter(x=>x?.enabled!==false);
+    phase69Text("phase69Runbooks", enabled.length);
+    const target=phase69El("phase69RunbookList"); if(!target) return;
+    target.innerHTML=(enabled.slice(0,5).map(r=>{
+        const name=r.name || r.runbook_name || r.runbook_key || r.key || `Runbook ${r.id ?? r.runbook_id ?? ""}`;
+        const metric=r.metric || r.match_metric || "automation";
+        const severity=r.severity || r.minimum_severity || r.min_severity || "enabled";
+        return `<div class="phase69-row"><div class="phase69-row-main"><div class="phase69-row-title">${phase69Esc(name)}</div><div class="phase69-row-meta">${phase69Esc(metric)} · ${phase69Esc(severity)}</div></div><span class="phase69-badge enabled">Enabled</span></div>`;
+    }).join("")) || '<div class="empty-state">No enabled runbooks returned.</div>';
+}
+function phase69RenderExecutions(body){
+    const rows=phase69Array(body,["executions","items","results"]);
+    phase69Text("phase69ExecutionCount",`${rows.length} execution${rows.length===1?"":"s"}`);
+    const pending=rows.filter(x=>String(x?.status||"").toUpperCase()==="PENDING_APPROVAL").length;
+    phase69Text("phase69Pending",pending);
+    const target=phase69El("phase69ExecutionList"); if(!target) return;
+    target.innerHTML=(rows.slice(0,7).map(x=>{
+        const id=x.execution_id ?? x.id ?? "--";
+        const title=x.runbook_name || x.runbook_key || x.runbook_id || `Execution ${id}`;
+        const status=String(x.status || "UNKNOWN").toUpperCase();
+        const when=x.completed_at || x.started_at || x.requested_at || x.created_at || "";
+        return `<div class="phase69-row"><div class="phase69-row-main"><div class="phase69-row-title">${phase69Esc(title)}</div><div class="phase69-row-meta">#${phase69Esc(id)}${when?` · ${phase69Esc(new Date(when).toLocaleString())}`:""}</div></div><span class="phase69-badge ${phase69Class(status)}">${phase69Esc(status.replaceAll("_"," "))}</span></div>`;
+    }).join("")) || '<div class="empty-state">No automation executions returned.</div>';
+}
+function phase69RenderAutomationSummary(body){
+    const s=phase69Object(body,["summary","automation_summary"]);
+    const total=phase69Num(s.total ?? s.total_executions ?? s.executions_total);
+    const successful=phase69Num(s.successful ?? s.succeeded ?? s.successful_executions);
+    const pending=phase69Num(s.pending ?? s.pending_approval ?? s.pending_approvals);
+    let rate=s.success_percentage ?? s.success_rate ?? s.success_percent;
+    if(rate==null && total>0) rate=successful/total*100;
+    phase69Text("phase69SuccessRate",phase69Pct(rate));
+    if(pending || phase69El("phase69Pending")?.textContent==="--") phase69Text("phase69Pending",pending);
+}
+function phase69RenderObjectives(body){
+    const rows=phase69Array(body,["objectives","items","results"]);
+    phase69Text("phase69ObjectiveCount",`${rows.length} objective${rows.length===1?"":"s"}`);
+    const target=phase69El("phase69ObjectiveList"); if(!target) return;
+    target.innerHTML=(rows.slice(0,8).map(o=>{
+        const name=o.objective_name || o.name || o.objective_key || `SLO ${o.objective_id ?? o.id ?? ""}`;
+        const metric=o.metric || "metric";
+        const targetPct=o.target_percentage ?? o.target_percent ?? o.target;
+        const status=String(o.status || o.latest_status || "CONFIGURED").toUpperCase();
+        return `<div class="phase69-row"><div class="phase69-row-main"><div class="phase69-row-title">${phase69Esc(name)}</div><div class="phase69-row-meta">${phase69Esc(metric)}${targetPct!=null?` · target ${phase69Esc(targetPct)}%`:""}</div></div><span class="phase69-badge ${phase69Class(status)}">${phase69Esc(status.replaceAll("_"," "))}</span></div>`;
+    }).join("")) || '<div class="empty-state">No reliability objectives returned.</div>';
+}
+function phase69RenderReliabilitySummary(body){
+    const s=phase69Object(body,["summary","reliability_summary"]);
+    const healthy=phase69Num(s.healthy ?? s.healthy_objectives);
+    const atRisk=phase69Num(s.at_risk ?? s.at_risk_objectives);
+    const breached=phase69Num(s.breached ?? s.breached_objectives);
+    const unknown=phase69Num(s.unknown ?? s.unknown_objectives);
+    phase69Text("phase69Healthy",healthy); phase69Text("phase69Breached",breached);
+    const target=phase69El("phase69ReliabilitySummary"); if(!target) return;
+    target.innerHTML=`<div class="phase69-summary-cell"><span>Healthy</span><strong>${healthy}</strong></div><div class="phase69-summary-cell"><span>At Risk</span><strong>${atRisk}</strong></div><div class="phase69-summary-cell"><span>Breached</span><strong>${breached}</strong></div><div class="phase69-summary-cell"><span>Unknown</span><strong>${unknown}</strong></div>`;
+}
+async function refreshPhase69(){
+    if(phase69State.loading || !phase69El("automationReliabilitySection")) return;
+    phase69State.loading=true;
+    const status=phase69El("phase69RefreshStatus"); if(status){status.textContent="REFRESHING";status.classList.add("loading");status.classList.remove("error");}
+    try{
+        const [runbooks,executions,automationSummary,objectives,measurements,reliabilitySummary]=await Promise.all([
+            phase69Fetch("/automation/runbooks"), phase69Fetch("/automation/executions"), phase69Fetch("/automation/summary"),
+            phase69Fetch("/reliability/objectives"), phase69Fetch("/reliability/measurements"), phase69Fetch("/reliability/summary")
+        ]);
+        [[runbooks,"runbooks"],[executions,"executions"],[automationSummary,"automation summary"],[objectives,"objectives"],[measurements,"measurements"],[reliabilitySummary,"reliability summary"]].forEach(([b,l])=>phase69Validate(b,l));
+        phase69RenderRunbooks(runbooks); phase69RenderExecutions(executions); phase69RenderAutomationSummary(automationSummary); phase69RenderObjectives(objectives); phase69RenderReliabilitySummary(reliabilitySummary);
+        if(status){status.textContent="LIVE";status.classList.remove("loading","error");}
+    }catch(error){
+        console.error("Phase 6.9E dashboard refresh failed:",error);
+        if(status){status.textContent="API ERROR";status.classList.remove("loading");status.classList.add("error");}
+    }finally{phase69State.loading=false;}
+}
+function initPhase69(){
+    if(!phase69El("automationReliabilitySection")) return;
+    phase69El("refreshPhase69Button")?.addEventListener("click",refreshPhase69);
+    refreshPhase69();
+    if(phase69State.refreshTimer) clearInterval(phase69State.refreshTimer);
+    phase69State.refreshTimer=window.setInterval(refreshPhase69,30000);
+}
+if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",initPhase69); else initPhase69();

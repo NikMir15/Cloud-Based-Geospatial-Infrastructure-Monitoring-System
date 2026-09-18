@@ -3376,3 +3376,44 @@ button.alert-card {
 .success-text { color:#5effa5 !important; }.danger-text { color:#ff6575 !important; }
 @media (max-width:1200px) { .phase68-kpi-grid { grid-template-columns:repeat(3,1fr); }.phase68-ops-grid { grid-template-columns:1fr; }.incident-toolbar { grid-template-columns:repeat(2,1fr); } }
 @media (max-width:760px) { .phase68-heading { align-items:flex-start; flex-direction:column; }.phase68-kpi-grid { grid-template-columns:repeat(2,1fr); }.phase68-priority-grid { grid-template-columns:repeat(2,1fr); }.incident-toolbar { grid-template-columns:1fr; }.incident-detail-grid { grid-template-columns:1fr; } }
+
+/* =========================================================
+   PHASE 6.9E — AUTOMATION + RELIABILITY ENGINEERING
+   Additive styles only; Phase 6.6–6.8 and map styles unchanged.
+========================================================= */
+.phase69-section { display: grid; gap: 18px; }
+.phase69-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; }
+.phase69-heading h2 { margin:4px 0 6px; }
+.phase69-heading p:last-child { margin:0; opacity:.72; max-width:760px; }
+.phase69-heading-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.phase69-live-pill { display:inline-flex; align-items:center; gap:7px; min-height:34px; padding:0 12px; border:1px solid rgba(63,230,255,.25); border-radius:999px; background:rgba(21,195,225,.08); font-size:11px; font-weight:800; letter-spacing:.12em; }
+.phase69-live-pill::before { content:""; width:7px; height:7px; border-radius:50%; background:#55f3c2; box-shadow:0 0 12px rgba(85,243,194,.8); }
+.phase69-live-pill.loading::before { background:#ffd166; box-shadow:0 0 12px rgba(255,209,102,.75); }
+.phase69-live-pill.error::before { background:#ff5f7d; box-shadow:0 0 12px rgba(255,95,125,.75); }
+.phase69-kpi-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; }
+.phase69-kpi-card { min-height:116px; display:flex; flex-direction:column; justify-content:center; gap:5px; }
+.phase69-kpi-card span { font-size:11px; text-transform:uppercase; letter-spacing:.1em; opacity:.68; }
+.phase69-kpi-card strong { font-size:27px; line-height:1; }
+.phase69-kpi-card small { opacity:.58; }
+.phase69-kpi-card.breach strong { color:#ff6b86; }
+.phase69-grid { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr); gap:16px; }
+.phase69-panel { min-width:0; }
+.phase69-count { font-size:11px; opacity:.7; white-space:nowrap; }
+.phase69-subheading { margin:14px 0 8px; font-size:11px; font-weight:800; letter-spacing:.11em; text-transform:uppercase; opacity:.68; }
+.phase69-spaced { margin-top:20px; }
+.phase69-list { display:grid; gap:8px; }
+.phase69-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; padding:11px 12px; border:1px solid rgba(130,190,255,.11); border-radius:12px; background:rgba(8,17,31,.38); }
+.phase69-row-main { min-width:0; }
+.phase69-row-title { font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.phase69-row-meta { margin-top:4px; font-size:11px; opacity:.62; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.phase69-badge { display:inline-flex; align-items:center; justify-content:center; min-width:72px; padding:5px 8px; border-radius:999px; border:1px solid rgba(130,190,255,.18); font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
+.phase69-badge.healthy,.phase69-badge.succeeded,.phase69-badge.enabled { color:#55f3c2; border-color:rgba(85,243,194,.28); background:rgba(85,243,194,.07); }
+.phase69-badge.breached,.phase69-badge.failed,.phase69-badge.critical { color:#ff6b86; border-color:rgba(255,107,134,.3); background:rgba(255,107,134,.07); }
+.phase69-badge.at-risk,.phase69-badge.pending-approval,.phase69-badge.running { color:#ffd166; border-color:rgba(255,209,102,.3); background:rgba(255,209,102,.07); }
+.phase69-reliability-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.phase69-summary-cell { padding:12px; border:1px solid rgba(130,190,255,.11); border-radius:12px; background:rgba(8,17,31,.38); }
+.phase69-summary-cell span { display:block; font-size:10px; text-transform:uppercase; letter-spacing:.08em; opacity:.6; }
+.phase69-summary-cell strong { display:block; margin-top:5px; font-size:20px; }
+.phase69-provenance { font-size:10px; opacity:.45; text-align:right; letter-spacing:.04em; }
+@media (max-width:1200px) { .phase69-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr));} .phase69-grid{grid-template-columns:1fr;} }
+@media (max-width:760px) { .phase69-heading{flex-direction:column;} .phase69-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));} .phase69-reliability-summary{grid-template-columns:1fr 1fr;} }
