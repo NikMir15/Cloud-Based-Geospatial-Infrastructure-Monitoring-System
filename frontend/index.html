@@ -94,6 +94,11 @@
                 <span class="nav-count" id="sidebarIncidentCount">0</span>
             </button>
 
+            <button class="nav-item" data-scroll-target="automationReliabilitySection">
+                <span class="nav-icon">⌘</span>
+                <span>Automation</span>
+            </button>
+
             <button class="nav-item" data-scroll-target="analyticsSection">
                 <span class="nav-icon">▥</span>
                 <span>Analytics</span>
@@ -977,6 +982,51 @@
         </section>
 
         <!-- =================================================
+             PHASE 6.9E — AUTOMATION + RELIABILITY
+        ================================================== -->
+        <section class="dashboard-section phase69-section" id="automationReliabilitySection">
+            <div class="phase69-heading">
+                <div>
+                    <p class="eyebrow">PHASE 6.9 · AUTOMATION &amp; RELIABILITY</p>
+                    <h2>Automation &amp; Reliability Engineering</h2>
+                    <p>Read-only operational view of runbooks, automation executions, SLO health and error-budget intelligence.</p>
+                </div>
+                <div class="phase69-heading-actions">
+                    <span id="phase69RefreshStatus" class="phase69-live-pill">LIVE</span>
+                    <button id="refreshPhase69Button" class="neon-button" type="button">Refresh</button>
+                </div>
+            </div>
+
+            <div class="phase69-kpi-grid">
+                <article class="glass-card phase69-kpi-card"><span>Runbooks</span><strong id="phase69Runbooks">--</strong><small>Enabled automation runbooks</small></article>
+                <article class="glass-card phase69-kpi-card"><span>Pending Approval</span><strong id="phase69Pending">--</strong><small>Executions awaiting approval</small></article>
+                <article class="glass-card phase69-kpi-card"><span>Success Rate</span><strong id="phase69SuccessRate">--</strong><small>Automation execution success</small></article>
+                <article class="glass-card phase69-kpi-card"><span>SLO Healthy</span><strong id="phase69Healthy">--</strong><small>Healthy reliability objectives</small></article>
+                <article class="glass-card phase69-kpi-card breach"><span>SLO Breached</span><strong id="phase69Breached">--</strong><small>Objectives outside target</small></article>
+            </div>
+
+            <div class="phase69-grid">
+                <article class="glass-card phase69-panel">
+                    <div class="card-heading"><div><span class="card-kicker">AUTOMATION OPERATIONS</span><h2>Runbooks &amp; Executions</h2></div><span id="phase69ExecutionCount" class="phase69-count">0 executions</span></div>
+                    <div class="phase69-subheading">Enabled Runbooks</div>
+                    <div id="phase69RunbookList" class="phase69-list"><div class="empty-state">Loading runbooks...</div></div>
+                    <div class="phase69-subheading phase69-spaced">Recent Executions</div>
+                    <div id="phase69ExecutionList" class="phase69-list"><div class="empty-state">Loading executions...</div></div>
+                </article>
+
+                <article class="glass-card phase69-panel">
+                    <div class="card-heading"><div><span class="card-kicker">RELIABILITY ENGINEERING</span><h2>SLO &amp; Error Budget</h2></div><span id="phase69ObjectiveCount" class="phase69-count">0 objectives</span></div>
+                    <div id="phase69ReliabilitySummary" class="phase69-reliability-summary"><div class="empty-state">Loading reliability summary...</div></div>
+                    <div class="phase69-subheading phase69-spaced">Reliability Objectives</div>
+                    <div id="phase69ObjectiveList" class="phase69-list"><div class="empty-state">Loading objectives...</div></div>
+                </article>
+            </div>
+
+            <div class="phase69-provenance">Project-local automation and reliability telemetry · source validation retained in API responses</div>
+        </section>
+
+
+        <!-- =================================================
              TEST MODE
         ================================================== -->
         <section class="dashboard-section" id="testSection">
@@ -1072,7 +1122,7 @@
 
 
         <footer class="dashboard-footer">
-            GeoInfra · Phase 6.8 · SRE Intelligence + Incident Operations
+            GeoInfra · Phase 6.9 · Automation + Reliability Engineering
         </footer>
 
     </main>
