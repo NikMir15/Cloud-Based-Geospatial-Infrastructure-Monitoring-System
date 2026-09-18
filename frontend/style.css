@@ -3417,3 +3417,325 @@ button.alert-card {
 .phase69-provenance { font-size:10px; opacity:.45; text-align:right; letter-spacing:.04em; }
 @media (max-width:1200px) { .phase69-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr));} .phase69-grid{grid-template-columns:1fr;} }
 @media (max-width:760px) { .phase69-heading{flex-direction:column;} .phase69-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));} .phase69-reliability-summary{grid-template-columns:1fr 1fr;} }
+
+
+/* ==========================================================
+   PHASE 7.0E — PREDICTIVE OPERATIONS
+   Additive styles only. Existing map and Phase 6.6–6.9
+   styles are intentionally unchanged.
+   ========================================================== */
+
+.phase70-section {
+    display: grid;
+    gap: 18px;
+}
+
+.phase70-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.phase70-heading h2 {
+    margin: 4px 0 6px;
+}
+
+.phase70-heading p:last-child {
+    margin: 0;
+    opacity: .72;
+    max-width: 760px;
+}
+
+.phase70-heading-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.phase70-live-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid rgba(63,230,255,.25);
+    border-radius: 999px;
+    background: rgba(21,195,225,.08);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .12em;
+}
+
+.phase70-live-pill::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #55f3c2;
+    box-shadow: 0 0 12px rgba(85,243,194,.8);
+}
+
+.phase70-live-pill.loading::before {
+    background: #ffd166;
+    box-shadow: 0 0 12px rgba(255,209,102,.75);
+}
+
+.phase70-live-pill.error::before {
+    background: #ff5f7d;
+    box-shadow: 0 0 12px rgba(255,95,125,.75);
+}
+
+.phase70-kpi-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.phase70-kpi-card {
+    min-height: 116px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+}
+
+.phase70-kpi-card span {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    opacity: .68;
+}
+
+.phase70-kpi-card strong {
+    font-size: 27px;
+    line-height: 1;
+}
+
+.phase70-kpi-card small {
+    opacity: .58;
+}
+
+.phase70-selector-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 20px;
+}
+
+.phase70-selector-card h3 {
+    margin: 5px 0 0;
+}
+
+.phase70-select-wrap {
+    min-width: min(420px, 100%);
+    display: grid;
+    gap: 6px;
+}
+
+.phase70-select-wrap > span {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    opacity: .62;
+}
+
+.phase70-select-wrap select {
+    width: 100%;
+    min-height: 42px;
+    padding: 0 12px;
+    border: 1px solid rgba(130,190,255,.18);
+    border-radius: 10px;
+    background: rgba(8,17,31,.82);
+    color: inherit;
+    outline: none;
+}
+
+.phase70-grid {
+    display: grid;
+    grid-template-columns:
+        minmax(0, 1fr)
+        minmax(0, 1fr);
+    gap: 16px;
+}
+
+.phase70-panel {
+    min-width: 0;
+}
+
+.phase70-content {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.phase70-metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(130,190,255,.11);
+    border-radius: 10px;
+    background: rgba(8,17,31,.30);
+}
+
+.phase70-metric span {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    opacity: .62;
+}
+
+.phase70-metric strong {
+    text-align: right;
+}
+
+.phase70-explanation {
+    padding: 12px;
+    border: 1px solid rgba(130,190,255,.11);
+    border-radius: 10px;
+    background: rgba(8,17,31,.30);
+    font-size: 12px;
+    line-height: 1.6;
+    opacity: .78;
+}
+
+.phase70-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.phase70-row {
+    display: grid;
+    grid-template-columns:
+        minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 12px;
+    border: 1px solid rgba(130,190,255,.11);
+    border-radius: 12px;
+    background: rgba(8,17,31,.38);
+}
+
+.phase70-row-main {
+    min-width: 0;
+}
+
+.phase70-row-title {
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.phase70-row-meta {
+    margin-top: 4px;
+    font-size: 11px;
+    opacity: .62;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.phase70-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 72px;
+    padding: 5px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(130,190,255,.18);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.phase70-badge.healthy {
+    color: #55f3c2;
+    border-color: rgba(85,243,194,.28);
+    background: rgba(85,243,194,.07);
+}
+
+.phase70-badge.warning {
+    color: #ffd166;
+    border-color: rgba(255,209,102,.30);
+    background: rgba(255,209,102,.07);
+}
+
+.phase70-badge.danger {
+    color: #ff6b86;
+    border-color: rgba(255,107,134,.30);
+    background: rgba(255,107,134,.07);
+}
+
+.phase70-risk-score {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+}
+
+.phase70-risk-score strong {
+    font-size: 38px;
+    line-height: 1;
+}
+
+.phase70-risk-score span {
+    opacity: .52;
+}
+
+.phase70-risk-level {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+
+.phase70-count {
+    font-size: 11px;
+    opacity: .70;
+}
+
+.phase70-provenance {
+    font-size: 10px;
+    opacity: .45;
+    text-align: right;
+    letter-spacing: .04em;
+}
+
+@media (max-width: 1200px) {
+    .phase70-kpi-grid {
+        grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+    }
+
+    .phase70-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 760px) {
+    .phase70-heading {
+        flex-direction: column;
+    }
+
+    .phase70-kpi-grid {
+        grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+    }
+
+    .phase70-selector-card {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .phase70-select-wrap {
+        min-width: 0;
+        width: 100%;
+    }
+}
+
