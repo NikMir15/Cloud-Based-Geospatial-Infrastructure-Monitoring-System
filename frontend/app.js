@@ -4781,3 +4781,689 @@ function initPhase69(){
     phase69State.refreshTimer=window.setInterval(refreshPhase69,30000);
 }
 if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",initPhase69); else initPhase69();
+
+
+// ============================================================
+// PHASE 7.0E — PREDICTIVE OPERATIONS
+// Additive integration. Existing map / Phase 6.6–6.9 logic
+// is intentionally left unchanged.
+// ============================================================
+
+const phase70State = {
+    loading: false,
+    selectedAssetId: null,
+    refreshTimer: null,
+    summary: null,
+    events: null
+};
+
+function phase70El(id) {
+    return document.getElementById(id);
+}
+
+function phase70Esc(value) {
+    return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+function phase70Num(value, fallback = 0) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function phase70Array(body, keys = []) {
+    if (Array.isArray(body)) return body;
+
+    if (!body || typeof body !== "object") return [];
+
+    for (const key of keys) {
+        if (Array.isArray(body[key])) return body[key];
+    }
+
+    if (body.results && typeof body.results === "object") {
+        for (const key of keys) {
+            if (Array.isArray(body.results[key])) {
+                return body.results[key];
+            }
+        }
+    }
+
+    return [];
+}
+
+function phase70Object(body, keys = []) {
+    if (!body || typeof body !== "object") return {};
+
+    for (const key of keys) {
+        if (
+            body[key] &&
+            typeof body[key] === "object" &&
+            !Array.isArray(body[key])
+        ) {
+            return body[key];
+        }
+    }
+
+    return body;
+}
+
+async function phase70Fetch(path) {
+    const response = await fetch(`${API_URL}${path}`, {
+        cache: "no-store"
+    });
+
+    let body = {};
+
+    try {
+        body = await response.json();
+    } catch (_) {
+        body = {};
+    }
+
+    if (!response.ok) {
+        throw new Error(
+            `${path} returned HTTP ${response.status}`
+        );
+    }
+
+    if (
+        body &&
+        typeof body === "object" &&
+        "source" in body &&
+        body.source !== "LOCAL_PROJECT"
+    ) {
+        console.warn(
+            "[Phase 7.0E] Unexpected source:",
+            path,
+            body.source
+        );
+    }
+
+    if (
+        body &&
+        typeof body === "object" &&
+        "external" in body &&
+        body.external !== false
+    ) {
+        console.warn(
+            "[Phase 7.0E] Unexpected external flag:",
+            path,
+            body.external
+        );
+    }
+
+    return body;
+}
+
+function phase70SetStatus(text, mode = "") {
+    const el = phase70El("phase70RefreshStatus");
+    if (!el) return;
+
+    el.textContent = text;
+    el.classList.remove("loading", "error");
+
+    if (mode) el.classList.add(mode);
+}
+
+function phase70SetBadge(id, text, className = "") {
+    const el = phase70El(id);
+    if (!el) return;
+
+    el.textContent = text || "UNKNOWN";
+    el.className = "phase70-badge";
+
+    if (className) {
+        el.classList.add(className);
+    }
+}
+
+function phase70SeverityClass(value) {
+    const v = String(value || "").toUpperCase();
+
+    if (
+        v.includes("CRITICAL") ||
+        v.includes("HIGH") ||
+        v.includes("BREACH")
+    ) {
+        return "danger";
+    }
+
+    if (
+        v.includes("WATCH") ||
+        v.includes("MEDIUM") ||
+        v.includes("WARN") ||
+        v.includes("RISING")
+    ) {
+        return "warning";
+    }
+
+    if (
+        v.includes("LOW") ||
+        v.includes("NORMAL") ||
+        v.includes("HEALTHY") ||
+        v.includes("STABLE")
+    ) {
+        return "healthy";
+    }
+
+    return "";
+}
+
+function phase70PopulateAssets() {
+    const select = phase70El("phase70AssetSelect");
+    if (!select) return;
+
+    const previous = String(
+        phase70State.selectedAssetId ?? select.value ?? ""
+    );
+
+    let assets = [];
+
+    if (
+        typeof infrastructureData !== "undefined" &&
+        Array.isArray(infrastructureData)
+    ) {
+        assets = infrastructureData;
+    }
+
+    select.innerHTML =
+        '<option value="">Select infrastructure...</option>';
+
+    assets.forEach((asset) => {
+        if (asset?.id == null) return;
+
+        const option = document.createElement("option");
+        option.value = String(asset.id);
+        option.textContent =
+            asset.name || `Infrastructure ${asset.id}`;
+
+        select.appendChild(option);
+    });
+
+    if (
+        previous &&
+        [...select.options].some(
+            (option) => option.value === previous
+        )
+    ) {
+        select.value = previous;
+    }
+}
+
+function phase70RenderSummary(body) {
+    phase70State.summary = body;
+
+    const anomaly =
+        body?.anomaly_events ??
+        body?.summary?.anomaly_events ??
+        {};
+
+    const total =
+        anomaly.total_events ??
+        anomaly.count ??
+        body?.total_events ??
+        0;
+
+    const affected =
+        anomaly.affected_assets ??
+        body?.affected_assets ??
+        0;
+
+    const totalEl = phase70El("phase70AnomalyCount");
+    const affectedEl = phase70El("phase70AffectedAssets");
+
+    if (totalEl) totalEl.textContent = phase70Num(total);
+    if (affectedEl) {
+        affectedEl.textContent = phase70Num(affected);
+    }
+}
+
+function phase70RenderEvents(body) {
+    phase70State.events = body;
+
+    const events = phase70Array(
+        body,
+        ["events", "anomaly_events", "results"]
+    );
+
+    const count =
+        body?.count ??
+        body?.total_events ??
+        events.length;
+
+    const countEl = phase70El("phase70EventCount");
+
+    if (countEl) {
+        countEl.textContent =
+            `${phase70Num(count)} event` +
+            `${phase70Num(count) === 1 ? "" : "s"}`;
+    }
+
+    const target = phase70El("phase70EventList");
+    if (!target) return;
+
+    if (!events.length) {
+        target.innerHTML =
+            '<div class="empty-state">' +
+            'No predictive anomaly events returned.' +
+            '</div>';
+        return;
+    }
+
+    target.innerHTML = events.slice(0, 12).map((event) => {
+        const severity =
+            event.severity ??
+            event.level ??
+            event.status ??
+            "UNKNOWN";
+
+        const metric =
+            event.metric ??
+            event.metric_name ??
+            "telemetry";
+
+        const asset =
+            event.asset_name ??
+            event.name ??
+            (
+                event.asset_id != null
+                    ? `Asset ${event.asset_id}`
+                    : "Infrastructure"
+            );
+
+        const when =
+            event.detected_at ??
+            event.created_at ??
+            event.evaluated_at ??
+            event.timestamp ??
+            "";
+
+        return `
+            <div class="phase70-row">
+                <div class="phase70-row-main">
+                    <div class="phase70-row-title">
+                        ${phase70Esc(asset)}
+                    </div>
+
+                    <div class="phase70-row-meta">
+                        ${phase70Esc(metric)}
+                        ${when ? ` · ${phase70Esc(when)}` : ""}
+                    </div>
+                </div>
+
+                <span class="phase70-badge ${phase70SeverityClass(severity)}">
+                    ${phase70Esc(severity)}
+                </span>
+            </div>
+        `;
+    }).join("");
+}
+
+function phase70RenderAnomaly(body) {
+    const target = phase70El("phase70AnomalyPanel");
+    if (!target) return;
+
+    const data = phase70Object(
+        body,
+        ["anomaly", "result", "analysis"]
+    );
+
+    const severity =
+        data.severity ??
+        body?.severity ??
+        data.status ??
+        body?.status ??
+        "NONE";
+
+    phase70SetBadge(
+        "phase70AnomalyBadge",
+        String(severity).toUpperCase(),
+        phase70SeverityClass(severity)
+    );
+
+    const metric =
+        data.metric ??
+        body?.metric ??
+        "Telemetry";
+
+    const score =
+        data.score ??
+        data.anomaly_score ??
+        body?.score ??
+        body?.anomaly_score;
+
+    const explanation =
+        data.explanation ??
+        data.reason ??
+        body?.explanation ??
+        body?.reason ??
+        "No anomaly explanation returned.";
+
+    target.innerHTML = `
+        <div class="phase70-metric">
+            <span>Metric</span>
+            <strong>${phase70Esc(metric)}</strong>
+        </div>
+
+        <div class="phase70-metric">
+            <span>Anomaly Score</span>
+            <strong>
+                ${score == null ? "—" : phase70Esc(score)}
+            </strong>
+        </div>
+
+        <div class="phase70-explanation">
+            ${phase70Esc(explanation)}
+        </div>
+    `;
+}
+
+function phase70RenderTrend(body) {
+    const target = phase70El("phase70TrendPanel");
+    if (!target) return;
+
+    const data = phase70Object(
+        body,
+        ["trend", "prediction", "result", "analysis"]
+    );
+
+    const trend =
+        data.trend ??
+        data.direction ??
+        body?.trend ??
+        body?.direction ??
+        "UNKNOWN";
+
+    phase70SetBadge(
+        "phase70TrendBadge",
+        String(trend).toUpperCase(),
+        phase70SeverityClass(trend)
+    );
+
+    const metric =
+        data.metric ??
+        body?.metric ??
+        "Telemetry";
+
+    const direction =
+        data.direction ??
+        data.trend ??
+        body?.direction ??
+        body?.trend ??
+        "UNKNOWN";
+
+    const forecast =
+        data.forecast ??
+        data.predicted_value ??
+        data.prediction ??
+        body?.forecast ??
+        body?.predicted_value;
+
+    const explanation =
+        data.explanation ??
+        data.reason ??
+        body?.explanation ??
+        body?.reason ??
+        "No trend explanation returned.";
+
+    target.innerHTML = `
+        <div class="phase70-metric">
+            <span>Metric</span>
+            <strong>${phase70Esc(metric)}</strong>
+        </div>
+
+        <div class="phase70-metric">
+            <span>Direction</span>
+            <strong>${phase70Esc(direction)}</strong>
+        </div>
+
+        <div class="phase70-metric">
+            <span>Forecast</span>
+            <strong>
+                ${forecast == null ? "—" : phase70Esc(forecast)}
+            </strong>
+        </div>
+
+        <div class="phase70-explanation">
+            ${phase70Esc(explanation)}
+        </div>
+    `;
+}
+
+function phase70RenderRisk(body) {
+    const target = phase70El("phase70RiskPanel");
+    if (!target) return;
+
+    const data = phase70Object(
+        body,
+        ["risk", "result", "analysis"]
+    );
+
+    const score =
+        data.score ??
+        data.risk_score ??
+        body?.score ??
+        body?.risk_score ??
+        0;
+
+    const level =
+        data.risk_level ??
+        data.level ??
+        body?.risk_level ??
+        body?.level ??
+        "UNKNOWN";
+
+    const explanation =
+        data.explanation ??
+        data.reason ??
+        body?.explanation ??
+        body?.reason ??
+        "No risk explanation returned.";
+
+    const scoreEl = phase70El("phase70SelectedRisk");
+    const levelEl = phase70El("phase70RiskLevel");
+
+    if (scoreEl) {
+        scoreEl.textContent =
+            `${phase70Num(score).toFixed(1)}`;
+    }
+
+    if (levelEl) {
+        levelEl.textContent =
+            String(level).toUpperCase();
+    }
+
+    phase70SetBadge(
+        "phase70RiskBadge",
+        String(level).toUpperCase(),
+        phase70SeverityClass(level)
+    );
+
+    target.innerHTML = `
+        <div class="phase70-risk-score">
+            <strong>${phase70Num(score).toFixed(1)}</strong>
+            <span>/ 100</span>
+        </div>
+
+        <div class="phase70-risk-level">
+            ${phase70Esc(String(level).toUpperCase())}
+        </div>
+
+        <div class="phase70-explanation">
+            ${phase70Esc(explanation)}
+        </div>
+    `;
+}
+
+function phase70ResetAssetPanels() {
+    phase70State.selectedAssetId = null;
+
+    const riskScore = phase70El("phase70SelectedRisk");
+    const riskLevel = phase70El("phase70RiskLevel");
+
+    if (riskScore) riskScore.textContent = "—";
+    if (riskLevel) riskLevel.textContent = "—";
+
+    [
+        ["phase70AnomalyPanel", "phase70AnomalyBadge"],
+        ["phase70TrendPanel", "phase70TrendBadge"],
+        ["phase70RiskPanel", "phase70RiskBadge"]
+    ].forEach(([panelId, badgeId]) => {
+        const panel = phase70El(panelId);
+
+        if (panel) {
+            panel.innerHTML =
+                '<div class="empty-state">' +
+                'Select an infrastructure asset.' +
+                '</div>';
+        }
+
+        phase70SetBadge(badgeId, "WAITING");
+    });
+}
+
+async function phase70RefreshGlobal() {
+    const [summary, events] = await Promise.all([
+        phase70Fetch("/predictive/summary"),
+        phase70Fetch("/anomaly-events")
+    ]);
+
+    phase70RenderSummary(summary);
+    phase70RenderEvents(events);
+}
+
+async function phase70RefreshAsset(assetId) {
+    if (!assetId) {
+        phase70ResetAssetPanels();
+        return;
+    }
+
+    phase70State.selectedAssetId = String(assetId);
+
+    const encoded = encodeURIComponent(assetId);
+
+    const [anomaly, trend, risk] = await Promise.all([
+        phase70Fetch(
+            `/predictive/anomalies/${encoded}`
+        ),
+        phase70Fetch(
+            `/predictive/trends/${encoded}`
+        ),
+        phase70Fetch(
+            `/predictive/risk/${encoded}`
+        )
+    ]);
+
+    phase70RenderAnomaly(anomaly);
+    phase70RenderTrend(trend);
+    phase70RenderRisk(risk);
+}
+
+async function refreshPhase70() {
+    if (
+        phase70State.loading ||
+        !phase70El("predictiveOperationsSection")
+    ) {
+        return;
+    }
+
+    phase70State.loading = true;
+    phase70SetStatus("REFRESHING", "loading");
+
+    try {
+        phase70PopulateAssets();
+
+        await phase70RefreshGlobal();
+
+        const select = phase70El("phase70AssetSelect");
+
+        if (select?.value) {
+            await phase70RefreshAsset(select.value);
+        }
+
+        phase70SetStatus("LIVE");
+    } catch (error) {
+        console.error(
+            "Phase 7.0E dashboard refresh failed:",
+            error
+        );
+
+        phase70SetStatus("API ERROR", "error");
+    } finally {
+        phase70State.loading = false;
+    }
+}
+
+function initPhase70() {
+    if (!phase70El("predictiveOperationsSection")) {
+        return;
+    }
+
+    phase70El("phase70RefreshButton")
+        ?.addEventListener(
+            "click",
+            refreshPhase70
+        );
+
+    phase70El("phase70AssetSelect")
+        ?.addEventListener(
+            "change",
+            async (event) => {
+                const value = event.target.value;
+
+                if (!value) {
+                    phase70ResetAssetPanels();
+                    return;
+                }
+
+                phase70SetStatus(
+                    "REFRESHING",
+                    "loading"
+                );
+
+                try {
+                    await phase70RefreshAsset(value);
+                    phase70SetStatus("LIVE");
+                } catch (error) {
+                    console.error(
+                        "Phase 7.0E asset analysis failed:",
+                        error
+                    );
+
+                    phase70SetStatus(
+                        "API ERROR",
+                        "error"
+                    );
+                }
+            }
+        );
+
+    phase70PopulateAssets();
+    refreshPhase70();
+
+    if (phase70State.refreshTimer) {
+        clearInterval(
+            phase70State.refreshTimer
+        );
+    }
+
+    phase70State.refreshTimer =
+        window.setInterval(
+            refreshPhase70,
+            30000
+        );
+}
+
+if (document.readyState === "loading") {
+    document.addEventListener(
+        "DOMContentLoaded",
+        initPhase70
+    );
+} else {
+    initPhase70();
+}
+

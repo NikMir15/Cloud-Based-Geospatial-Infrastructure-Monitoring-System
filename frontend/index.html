@@ -99,7 +99,12 @@
                 <span>Automation</span>
             </button>
 
-            <button class="nav-item" data-scroll-target="analyticsSection">
+            <button class="nav-item" data-scroll-target="predictiveOperationsSection">
+            <span class="nav-icon">⌁</span>
+            <span>Predictive Ops</span>
+        </button>
+
+        <button class="nav-item" data-scroll-target="analyticsSection">
                 <span class="nav-icon">▥</span>
                 <span>Analytics</span>
             </button>
@@ -1121,7 +1126,198 @@
         </section>
 
 
-        <footer class="dashboard-footer">
+    
+    <!-- ==================================================
+         PHASE 7.0E — PREDICTIVE OPERATIONS
+         Additive UI only. Existing map and Phase 6.6–6.9
+         sections remain unchanged.
+         ================================================== -->
+    <section
+        class="dashboard-section phase70-section"
+        id="predictiveOperationsSection"
+    >
+        <div class="phase70-heading">
+            <div>
+                <p class="eyebrow">
+                    PHASE 7.0 · PREDICTIVE OPERATIONS
+                </p>
+                <h2>Predictive Infrastructure Intelligence</h2>
+                <p>
+                    Local telemetry anomaly detection, trend analysis
+                    and operational risk prioritisation.
+                </p>
+            </div>
+
+            <div class="phase70-heading-actions">
+                <span
+                    id="phase70RefreshStatus"
+                    class="phase70-live-pill"
+                >LIVE</span>
+
+                <button
+                    id="phase70RefreshButton"
+                    class="neon-button subtle"
+                    type="button"
+                >
+                    Refresh
+                </button>
+            </div>
+        </div>
+
+        <div class="phase70-kpi-grid">
+            <article class="glass-card phase70-kpi-card">
+                <span>Anomaly Events</span>
+                <strong id="phase70AnomalyCount">—</strong>
+                <small>Persisted predictive anomaly events</small>
+            </article>
+
+            <article class="glass-card phase70-kpi-card">
+                <span>Affected Assets</span>
+                <strong id="phase70AffectedAssets">—</strong>
+                <small>Assets represented by anomaly events</small>
+            </article>
+
+            <article class="glass-card phase70-kpi-card">
+                <span>Selected Risk</span>
+                <strong id="phase70SelectedRisk">—</strong>
+                <small>Operational risk score / 100</small>
+            </article>
+
+            <article class="glass-card phase70-kpi-card">
+                <span>Risk Level</span>
+                <strong id="phase70RiskLevel">—</strong>
+                <small>Selected infrastructure risk classification</small>
+            </article>
+        </div>
+
+        <article class="glass-card phase70-selector-card">
+            <div>
+                <span class="card-kicker">INFRASTRUCTURE ASSET</span>
+                <h3>Predictive Analysis Target</h3>
+            </div>
+
+            <label class="phase70-select-wrap">
+                <span>Asset</span>
+                <select id="phase70AssetSelect">
+                    <option value="">
+                        Select infrastructure...
+                    </option>
+                </select>
+            </label>
+        </article>
+
+        <div class="phase70-grid">
+            <article class="glass-card phase70-panel">
+                <div class="card-heading">
+                    <div>
+                        <span class="card-kicker">
+                            ANOMALY DETECTION
+                        </span>
+                        <h2>Telemetry Anomalies</h2>
+                    </div>
+
+                    <span
+                        id="phase70AnomalyBadge"
+                        class="phase70-badge"
+                    >WAITING</span>
+                </div>
+
+                <div
+                    id="phase70AnomalyPanel"
+                    class="phase70-content"
+                >
+                    <div class="empty-state">
+                        Select an infrastructure asset.
+                    </div>
+                </div>
+            </article>
+
+            <article class="glass-card phase70-panel">
+                <div class="card-heading">
+                    <div>
+                        <span class="card-kicker">
+                            TREND PREDICTION
+                        </span>
+                        <h2>Telemetry Trends</h2>
+                    </div>
+
+                    <span
+                        id="phase70TrendBadge"
+                        class="phase70-badge"
+                    >WAITING</span>
+                </div>
+
+                <div
+                    id="phase70TrendPanel"
+                    class="phase70-content"
+                >
+                    <div class="empty-state">
+                        Select an infrastructure asset.
+                    </div>
+                </div>
+            </article>
+        </div>
+
+        <div class="phase70-grid phase70-risk-grid">
+            <article class="glass-card phase70-panel">
+                <div class="card-heading">
+                    <div>
+                        <span class="card-kicker">
+                            PREDICTIVE RISK
+                        </span>
+                        <h2>Operational Risk</h2>
+                    </div>
+
+                    <span
+                        id="phase70RiskBadge"
+                        class="phase70-badge"
+                    >WAITING</span>
+                </div>
+
+                <div
+                    id="phase70RiskPanel"
+                    class="phase70-content"
+                >
+                    <div class="empty-state">
+                        Select an infrastructure asset.
+                    </div>
+                </div>
+            </article>
+
+            <article class="glass-card phase70-panel">
+                <div class="card-heading">
+                    <div>
+                        <span class="card-kicker">
+                            PREDICTIVE EVENT HISTORY
+                        </span>
+                        <h2>Recent Anomaly Events</h2>
+                    </div>
+
+                    <span
+                        id="phase70EventCount"
+                        class="phase70-count"
+                    >0 events</span>
+                </div>
+
+                <div
+                    id="phase70EventList"
+                    class="phase70-list"
+                >
+                    <div class="empty-state">
+                        Loading anomaly events...
+                    </div>
+                </div>
+            </article>
+        </div>
+
+        <div class="phase70-provenance">
+            Predictive analysis uses project-local telemetry.
+            Operational prioritisation heuristic only;
+            not a guaranteed future prediction.
+        </div>
+    </section>
+
+    <footer class="dashboard-footer">
             GeoInfra · Phase 6.9 · Automation + Reliability Engineering
         </footer>
 
