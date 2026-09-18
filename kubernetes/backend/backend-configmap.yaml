@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: geoinfra
+data:
+  DB_HOST: geodb
+  DB_PORT: "5432"
+  DB_NAME: geospatialdb
+  DB_USER: postgres

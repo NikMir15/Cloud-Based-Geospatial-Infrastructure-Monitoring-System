@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: geo-backend
+  namespace: geoinfra
+  labels:
+    app: geo-backend
+
+spec:
+  type: ClusterIP
+
+  selector:
+    app: geo-backend
+
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
