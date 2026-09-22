@@ -2,7 +2,15 @@ from fastapi import (
     FastAPI,
     WebSocket,
     Query,
-    HTTPException
+    HTTPException,
+)
+from fastapi.responses import Response
+
+from metrics_engine import (
+    HTTP_REQUESTS_TOTAL,
+    HTTP_REQUEST_DURATION_SECONDS,
+    HTTP_REQUESTS_IN_PROGRESS,
+    set_infrastructure_asset_count,
 )
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -418,6 +426,11 @@ def load_locations():
             .fetchall()
         )
 
+    # Phase 9.1C: keep the Prometheus infrastructure asset gauge
+    # synchronized with the number of assets returned by PostGIS.
+    set_infrastructure_asset_count(
+        len(rows)
+    )
 
     return [
 
@@ -3485,6 +3498,83 @@ app = FastAPI(
 
     lifespan=lifespan
 )
+
+# ============================================================
+# PHASE 9.1 - PROMETHEUS APPLICATION OBSERVABILITY
+# ============================================================
+
+@app.middleware("http")
+async def prometheus_metrics_middleware(request, call_next):
+    """
+    Record application-level HTTP request metrics.
+
+    Metrics:
+    - request count
+    - request latency
+    - requests currently in progress
+    """
+
+    method = request.method
+    path = request.url.path
+
+    HTTP_REQUESTS_IN_PROGRESS.labels(
+        method=method
+    ).inc()
+
+    try:
+
+        with HTTP_REQUEST_DURATION_SECONDS.labels(
+            method=method,
+            path=path,
+        ).time():
+
+            response = await call_next(request)
+
+        HTTP_REQUESTS_TOTAL.labels(
+            method=method,
+            path=path,
+            status_code=str(response.status_code),
+        ).inc()
+
+        return response
+
+    except Exception:
+
+        HTTP_REQUESTS_TOTAL.labels(
+            method=method,
+            path=path,
+            status_code="500",
+        ).inc()
+
+        raise
+
+    finally:
+
+        HTTP_REQUESTS_IN_PROGRESS.labels(
+            method=method
+        ).dec()
+
+
+@app.get(
+    "/metrics",
+    include_in_schema=False,
+)
+def prometheus_metrics():
+    """
+    Prometheus metrics exposition endpoint.
+    """
+
+    from prometheus_client import (
+        CONTENT_TYPE_LATEST,
+        generate_latest,
+    )
+
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
+
+
 
 
 app.add_middleware(
